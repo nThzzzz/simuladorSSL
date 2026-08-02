@@ -1,85 +1,134 @@
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 
 public class Main {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            JFrame frame = new JFrame("SSL Simulator 2D");
+            JFrame frame = new JFrame("SSL Simulator Engine");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-
-            // Usamos BorderLayout para dividir a tela entre o Campo (Centro) e os Controles (Baixo)
             frame.setLayout(new BorderLayout());
 
-            // 1. Cria o campo com valores iniciais padrão (já carrega com 6 de cada lado)
-            Campo campo = new Campo("RoboFEI", 6, "Adversário", 6);
+            Mundo mundo = new Mundo(Campo.FIELD_WIDTH, Campo.FIELD_HEIGHT);
+
+            Campo campo = new Campo(mundo);
+            mundo.inicializarPartida("RoboFEI", 6, "Adversário", 6, campo);
             frame.add(campo, BorderLayout.CENTER);
 
-            // 2. === PAINEL DE CONTROLE (INTERFACE NA TELA) ===
-            JPanel painelControle = new JPanel();
-            painelControle.setBackground(new Color(40, 40, 40)); // Fundo escuro combinando
+            setupController(campo, mundo);
 
-            // Campos de entrada Time Azul
-            JLabel lblAzul = new JLabel("Time Azul:");
-            lblAzul.setForeground(new Color(60, 130, 255));
-            JTextField txtNomeAzul = new JTextField("RoboFEI", 8);
-            JTextField txtQtdAzul = new JTextField("6", 2);
-
-            // Campos de entrada Time Amarelo
-            JLabel lblAmarelo = new JLabel("  Time Amarelo:");
-            lblAmarelo.setForeground(new Color(255, 210, 0));
-            JTextField txtNomeAmarelo = new JTextField("Adversário", 8);
-            JTextField txtQtdAmarelo = new JTextField("6", 2);
-
-            // Botão de Confirmação
-            JButton btnAtualizar = new JButton("Confirmar / Atualizar");
-
-            // 3. Adicionando os elementos no painel inferior (um do lado do outro)
-            painelControle.add(lblAzul);
-            painelControle.add(txtNomeAzul);
-            painelControle.add(criaLabelBranca("Qtd:"));
-            painelControle.add(txtQtdAzul);
-
-            painelControle.add(lblAmarelo);
-            painelControle.add(txtNomeAmarelo);
-            painelControle.add(criaLabelBranca("Qtd:"));
-            painelControle.add(txtQtdAmarelo);
-
-            painelControle.add(new JLabel("   ")); // Espaçador
-            painelControle.add(btnAtualizar);
-
-            // 4. === AÇÃO DO BOTÃO ===
-            btnAtualizar.addActionListener(e -> {
-                try {
-                    // Pega o texto que você digitou na tela
-                    String nomeAzul = txtNomeAzul.getText();
-                    int qtdAzul = Integer.parseInt(txtQtdAzul.getText());
-
-                    String nomeAmarelo = txtNomeAmarelo.getText();
-                    int qtdAmarelo = Integer.parseInt(txtQtdAmarelo.getText());
-
-                    // Chama a nova função do campo para atualizar os robôs em tempo real!
-                    campo.atualizarPartida(nomeAzul, qtdAzul, nomeAmarelo, qtdAmarelo);
-
-                } catch (NumberFormatException ex) {
-                    // Proteção básica caso alguém digite letras onde devia ser número
-                    JOptionPane.showMessageDialog(frame, "A quantidade de robôs deve ser um número inteiro!", "Erro", JOptionPane.ERROR_MESSAGE);
-                }
-            });
-
-            // Adiciona a barra de controles na parte de baixo (SOUTH) da janela principal
+            JPanel painelControle = criarPainelControle(mundo, campo);
             frame.add(painelControle, BorderLayout.SOUTH);
+
+            Timer gameLoop = new Timer(16, e -> {
+                mundo.updatePhysics(0.016);
+                campo.repaint();
+            });
+            gameLoop.start();
 
             frame.pack();
             frame.setLocationRelativeTo(null);
-            frame.setResizable(false);
             frame.setVisible(true);
         });
     }
 
-    // Função auxiliar só para criar textos brancos e economizar código
+    private static JPanel criarPainelControle(Mundo mundo, Campo campo) {
+        JPanel painel = new JPanel();
+        painel.setBackground(new Color(40, 40, 40));
+
+        JLabel lblAzul = new JLabel("Time Azul:");
+        lblAzul.setForeground(new Color(60, 130, 255));
+        JTextField txtNomeAzul = new JTextField("RoboFEI", 8);
+        JTextField txtQtdAzul = new JTextField("6", 2);
+
+        JLabel lblAmarelo = new JLabel("  Time Amarelo:");
+        lblAmarelo.setForeground(new Color(255, 210, 0));
+        JTextField txtNomeAmarelo = new JTextField("Adversário", 8);
+        JTextField txtQtdAmarelo = new JTextField("6", 2);
+
+        JButton btnAtualizar = new JButton("Confirmar Alteração");
+
+        painel.add(lblAzul); painel.add(txtNomeAzul);
+        painel.add(criaLabelBranca("Qtd:")); painel.add(txtQtdAzul);
+        painel.add(lblAmarelo); painel.add(txtNomeAmarelo);
+        painel.add(criaLabelBranca("Qtd:")); painel.add(txtQtdAmarelo);
+        painel.add(new JLabel("   "));
+        painel.add(btnAtualizar);
+
+        btnAtualizar.addActionListener(e -> {
+            try {
+                String nomeAzul = txtNomeAzul.getText();
+                int qtdAzul = Integer.parseInt(txtQtdAzul.getText());
+                String nomeAmarelo = txtNomeAmarelo.getText();
+                int qtdAmarelo = Integer.parseInt(txtQtdAmarelo.getText());
+
+                mundo.inicializarPartida(nomeAzul, qtdAzul, nomeAmarelo, qtdAmarelo, campo);
+
+                campo.repaint();
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(null, "A quantidade de robôs deve ser um número inteiro!", "Erro", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+
+        return painel;
+    }
+
     private static JLabel criaLabelBranca(String texto) {
         JLabel label = new JLabel(texto);
         label.setForeground(Color.WHITE);
         return label;
+    }
+
+    private static void setupController(Campo campo, Mundo mundo) {
+        MouseAdapter mouse = new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                double cartX = getCartX(e.getX(), campo);
+                double cartY = getCartY(e.getY(), campo);
+                if (Math.hypot(cartX - mundo.bola.x, cartY - mundo.bola.y) < 15) {
+                    campo.showAim = true;
+                    mundo.bola.aplicarForca(0, 0);
+                }
+            }
+            @Override
+            public void mouseDragged(MouseEvent e) {
+                campo.mouseX = e.getX(); campo.mouseY = e.getY();
+                if (campo.showAim) {
+                    campo.dragX = getCartX(e.getX(), campo);
+                    campo.dragY = getCartY(e.getY(), campo);
+                }
+            }
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (campo.showAim) {
+                    campo.showAim = false;
+                    double forcaX = (campo.dragX - mundo.bola.x) * 3.0;
+                    double forcaY = (campo.dragY - mundo.bola.y) * 3.0;
+                    mundo.bola.aplicarForca(forcaX, forcaY);
+                }
+            }
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                campo.mouseX = e.getX(); campo.mouseY = e.getY();
+            }
+            @Override
+            public void mouseWheelMoved(java.awt.event.MouseWheelEvent e) {
+                double rot = e.getPreciseWheelRotation();
+                if (rot < 0) campo.zoomFactor *= (1.0 - (rot * 0.05));
+                else if (rot > 0) campo.zoomFactor /= (1.0 + (rot * 0.05));
+                campo.zoomFactor = Math.max(0.2, Math.min(campo.zoomFactor, 5.0));
+            }
+        };
+        campo.addMouseListener(mouse);
+        campo.addMouseMotionListener(mouse);
+        campo.addMouseWheelListener(mouse);
+    }
+
+    private static double getCartX(int screenX, Campo campo) {
+        return (screenX - (Campo.MARGIN + Campo.FIELD_WIDTH / 2.0)) / campo.zoomFactor;
+    }
+    private static double getCartY(int screenY, Campo campo) {
+        return ((Campo.MARGIN + Campo.FIELD_HEIGHT / 2.0) - screenY) / campo.zoomFactor;
     }
 }

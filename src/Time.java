@@ -23,7 +23,6 @@ public class Time {
 
         Point[] pontos = {
                 // === ALAS ===
-                // Repare que agora todos os Xs base são positivos (abs)
                 // Ala superior (Y positivo)
                 new Point(abs(FIELD_WIDTH/2 - 3*(FIELD_WIDTH/10)), abs(FIELD_HEIGHT/2 - FIELD_HEIGHT/4)),
                 // Ala inferior (Y negativo)
@@ -43,10 +42,7 @@ public class Time {
         this.robos.clear();
 
         for (int i = 0; i < pontos.length && i < this.numRobos; i++) {
-            // Azul (true) multiplica X por -1 e joga para a esquerda. Amarelo (false) mantém na direita.
             int sinalX = this.isBlue ? -1 : 1;
-
-            // Azul olha para a direita (0). Amarelo olha para a esquerda (PI/180º).
             double theta = this.isBlue ? 0 : Math.PI;
 
             this.robos.add(new Robot(sinalX * pontos[i].x, pontos[i].y, theta, this.isBlue, i));

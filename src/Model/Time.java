@@ -1,3 +1,7 @@
+package Model;
+
+import View.Campo;
+
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -7,7 +11,7 @@ import static java.lang.Math.abs;
 public class Time {
     private String nome;
     private int numRobos;
-    private List<Robot> robos;
+    private List<Model.Robot> robos;
     private boolean isBlue;
 
     public Time(String nome, int numRobos, boolean isBlue) {
@@ -17,7 +21,7 @@ public class Time {
         this.isBlue = isBlue;
     }
 
-    public List<Robot> istanciarRobos(Campo campo) {
+    public List<Model.Robot> istanciarRobos(Campo campo) {
         int FIELD_WIDTH = campo.getPreferredSize().width;
         int FIELD_HEIGHT = campo.getPreferredSize().height;
 
@@ -49,5 +53,37 @@ public class Time {
         }
 
         return this.robos;
+    }
+
+    public String getNome() {
+        return nome;
+    }
+
+    public void setNome(String nome) {
+        this.nome = nome;
+    }
+
+    public int getNumRobos() {
+        return numRobos;
+    }
+
+    public void setNumRobos(int numRobos) {
+        this.numRobos = numRobos;
+    }
+
+    public List<Robot> getRobos() {
+        return robos;
+    }
+
+    public void setRobos(List<Robot> robos) {
+        this.robos = robos;
+    }
+
+    public boolean isBlue() {
+        return isBlue;
+    }
+
+    public void setBlue(boolean blue) {
+        isBlue = blue;
     }
 }

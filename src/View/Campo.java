@@ -1,3 +1,8 @@
+package View;
+
+import Engine.Mundo;
+import Model.Robot;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.geom.AffineTransform;
@@ -35,7 +40,7 @@ public class Campo extends JPanel {
 
         drawField(g2d);
         drawBall(g2d);
-        for (Robot r : mundo.robots) {
+        for (Model.Robot r : mundo.getRobots()) {
             drawRobot(g2d, r);
         }
 
@@ -52,9 +57,9 @@ public class Campo extends JPanel {
         g2d.setColor(Color.WHITE);
 
         // Converte de cm/s para m/s dividindo por 100
-        double velMS = mundo.bola.getVelocidade() / 100.0;
+        double velMS = mundo.getBola().getVelocidade() / 100.0;
 
-        g2d.drawString(String.format("Velocidade da Bola: %.2f m/s", velMS), 20, 30);
+        g2d.drawString(String.format("Velocidade da Model.Bola: %.2f m/s", velMS), 20, 30);
     }
 
     private void drawField(Graphics2D g2d) {
@@ -93,26 +98,26 @@ public class Campo extends JPanel {
         double radius = 9;
 
         AffineTransform oldTransform = g2d.getTransform();
-        g2d.translate(r.x, r.y);
-        g2d.rotate(r.theta);
+        g2d.translate(r.getX(), r.getY());
+        g2d.rotate(r.getTheta());
 
         g2d.setColor(new Color(40, 40, 40));
         Arc2D.Double body = new Arc2D.Double(-radius, -radius, radius * 2, radius * 2, 40, 280, Arc2D.CHORD);
         g2d.fill(body);
 
-        g2d.setColor(r.isBlue ? new Color(0, 100, 255) : new Color(255, 210, 0));
+        g2d.setColor(r.isBlue() ? new Color(0, 100, 255) : new Color(255, 210, 0));
         g2d.fillOval(-3, -3, 6, 6);
 
-        g2d.rotate(-r.theta);
+        g2d.rotate(-r.getTheta());
         g2d.scale(1, -1);
 
         g2d.setColor(Color.WHITE);
         g2d.setFont(new Font("Arial", Font.BOLD, 9));
         FontMetrics fm = g2d.getFontMetrics();
-        int textWidth = fm.stringWidth(String.valueOf(r.id));
+        int textWidth = fm.stringWidth(String.valueOf(r.getId()));
         int textHeight = fm.getAscent();
 
-        g2d.drawString(String.valueOf(r.id), -textWidth / 2, textHeight / 2 - 1);
+        g2d.drawString(String.valueOf(r.getId()), -textWidth / 2, textHeight / 2 - 1);
 
         g2d.setTransform(oldTransform);
     }
@@ -147,24 +152,24 @@ public class Campo extends JPanel {
 
     private void drawBall(Graphics2D g2d) {
         AffineTransform old = g2d.getTransform();
-        g2d.translate(mundo.bola.x, mundo.bola.y);
+        g2d.translate(mundo.getBola().getX(), mundo.getBola().getY());
 
         g2d.setColor(new Color(255, 140, 0));
-        g2d.fillOval((int)-mundo.bola.radius, (int)-mundo.bola.radius, (int)mundo.bola.radius * 2, (int)mundo.bola.radius * 2);
+        g2d.fillOval((int)-mundo.getBola().getRadius(), (int)-mundo.getBola().getRadius(), (int) mundo.getBola().getRadius() * 2, (int) mundo.getBola().getRadius() * 2);
 
         g2d.setColor(new Color(0, 0, 0, 200));
         g2d.setStroke(new BasicStroke(0.5f));
-        g2d.drawOval((int)-mundo.bola.radius, (int)-mundo.bola.radius, (int)mundo.bola.radius * 2, (int)mundo.bola.radius * 2);
+        g2d.drawOval((int)-mundo.getBola().getRadius(), (int)-mundo.getBola().getRadius(), (int) mundo.getBola().getRadius() * 2, (int) mundo.getBola().getRadius() * 2);
 
         g2d.setTransform(old);
     }
 
     private void drawAimVector(Graphics2D g2d) {
-        double dx = (dragX - mundo.bola.x);
-        double dy = (dragY - mundo.bola.y);
+        double dx = (dragX - mundo.getBola().getX());
+        double dy = (dragY - mundo.getBola().getY());
 
         g2d.setColor(new Color(255, 50, 50, 200));
         g2d.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-        g2d.drawLine((int)mundo.bola.x, (int)mundo.bola.y, (int)(mundo.bola.x + dx), (int)(mundo.bola.y + dy));
+        g2d.drawLine((int) mundo.getBola().getX(), (int) mundo.getBola().getY(), (int)(mundo.getBola().getX() + dx), (int)(mundo.getBola().getY() + dy));
     }
 }

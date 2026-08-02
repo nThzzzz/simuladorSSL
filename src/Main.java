@@ -1,3 +1,6 @@
+import Engine.Mundo;
+import View.Campo;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
@@ -37,12 +40,12 @@ public class Main {
         JPanel painel = new JPanel();
         painel.setBackground(new Color(40, 40, 40));
 
-        JLabel lblAzul = new JLabel("Time Azul:");
+        JLabel lblAzul = new JLabel("Model.Time Azul:");
         lblAzul.setForeground(new Color(60, 130, 255));
         JTextField txtNomeAzul = new JTextField("RoboFEI", 8);
         JTextField txtQtdAzul = new JTextField("6", 2);
 
-        JLabel lblAmarelo = new JLabel("  Time Amarelo:");
+        JLabel lblAmarelo = new JLabel("  Model.Time Amarelo:");
         lblAmarelo.setForeground(new Color(255, 210, 0));
         JTextField txtNomeAmarelo = new JTextField("Adversário", 8);
         JTextField txtQtdAmarelo = new JTextField("6", 2);
@@ -86,9 +89,9 @@ public class Main {
             public void mousePressed(MouseEvent e) {
                 double cartX = getCartX(e.getX(), campo);
                 double cartY = getCartY(e.getY(), campo);
-                if (Math.hypot(cartX - mundo.bola.x, cartY - mundo.bola.y) < 15) {
+                if (Math.hypot(cartX - mundo.getBola().getX(), cartY - mundo.getBola().getY()) < 15) {
                     campo.showAim = true;
-                    mundo.bola.aplicarForca(0, 0);
+                    mundo.getBola().aplicarForca(0, 0);
                 }
             }
             @Override
@@ -103,9 +106,9 @@ public class Main {
             public void mouseReleased(MouseEvent e) {
                 if (campo.showAim) {
                     campo.showAim = false;
-                    double forcaX = (campo.dragX - mundo.bola.x) * 3.0;
-                    double forcaY = (campo.dragY - mundo.bola.y) * 3.0;
-                    mundo.bola.aplicarForca(forcaX, forcaY);
+                    double forcaX = (campo.dragX - mundo.getBola().getX()) * 3.0;
+                    double forcaY = (campo.dragY - mundo.getBola().getY()) * 3.0;
+                    mundo.getBola().aplicarForca(forcaX, forcaY);
                 }
             }
             @Override

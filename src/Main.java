@@ -89,7 +89,7 @@ public class Main {
             public void mousePressed(MouseEvent e) {
                 double cartX = getCartX(e.getX(), campo);
                 double cartY = getCartY(e.getY(), campo);
-                if (Math.hypot(cartX - mundo.getBola().getX(), cartY - mundo.getBola().getY()) < 15) {
+                if (Math.hypot(cartX - mundo.getBola().getPosicao().getX(), cartY - mundo.getBola().getPosicao().getY()) < 15) {
                     campo.showAim = true;
                     mundo.getBola().aplicarForca(0, 0);
                 }
@@ -106,8 +106,8 @@ public class Main {
             public void mouseReleased(MouseEvent e) {
                 if (campo.showAim) {
                     campo.showAim = false;
-                    double forcaX = (campo.dragX - mundo.getBola().getX()) * 3.0;
-                    double forcaY = (campo.dragY - mundo.getBola().getY()) * 3.0;
+                    double forcaX = (campo.dragX - mundo.getBola().getPosicao().getX()) * 3.0;
+                    double forcaY = (campo.dragY - mundo.getBola().getPosicao().getY()) * 3.0;
                     mundo.getBola().aplicarForca(forcaX, forcaY);
                 }
             }

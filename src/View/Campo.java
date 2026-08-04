@@ -98,7 +98,7 @@ public class Campo extends JPanel {
         double radius = 9;
 
         AffineTransform oldTransform = g2d.getTransform();
-        g2d.translate(r.getX(), r.getY());
+        g2d.translate(r.getPosicao().getX(), r.getPosicao().getY());
         g2d.rotate(r.getTheta());
 
         g2d.setColor(new Color(40, 40, 40));
@@ -152,7 +152,7 @@ public class Campo extends JPanel {
 
     private void drawBall(Graphics2D g2d) {
         AffineTransform old = g2d.getTransform();
-        g2d.translate(mundo.getBola().getX(), mundo.getBola().getY());
+        g2d.translate(mundo.getBola().getPosicao().getX(), mundo.getBola().getPosicao().getY());
 
         g2d.setColor(new Color(255, 140, 0));
         g2d.fillOval((int)-mundo.getBola().getRadius(), (int)-mundo.getBola().getRadius(), (int) mundo.getBola().getRadius() * 2, (int) mundo.getBola().getRadius() * 2);
@@ -165,11 +165,11 @@ public class Campo extends JPanel {
     }
 
     private void drawAimVector(Graphics2D g2d) {
-        double dx = (dragX - mundo.getBola().getX());
-        double dy = (dragY - mundo.getBola().getY());
+        double dx = (dragX - mundo.getBola().getPosicao().getX());
+        double dy = (dragY - mundo.getBola().getPosicao().getY());
 
         g2d.setColor(new Color(255, 50, 50, 200));
         g2d.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-        g2d.drawLine((int) mundo.getBola().getX(), (int) mundo.getBola().getY(), (int)(mundo.getBola().getX() + dx), (int)(mundo.getBola().getY() + dy));
+        g2d.drawLine((int) mundo.getBola().getPosicao().getX(), (int) mundo.getBola().getPosicao().getY(), (int)(mundo.getBola().getPosicao().getX() + dx), (int)(mundo.getBola().getPosicao().getY() + dy));
     }
 }

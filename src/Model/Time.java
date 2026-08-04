@@ -3,6 +3,7 @@ package Model;
 import View.Campo;
 
 import java.awt.*;
+import java.awt.geom.Point2D;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -48,8 +49,8 @@ public class Time {
         for (int i = 0; i < pontos.length && i < this.numRobos; i++) {
             int sinalX = this.isBlue ? -1 : 1;
             double theta = this.isBlue ? 0 : Math.PI;
-
-            this.robos.add(new Robot(sinalX * pontos[i].x, pontos[i].y, theta, this.isBlue, i));
+            Point2D.Double posicao = new Point2D.Double(sinalX * pontos[i].x, pontos[i].y);
+            this.robos.add(new Robot(posicao, theta, this.isBlue, i));
         }
 
         return this.robos;

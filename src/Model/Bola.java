@@ -1,8 +1,11 @@
 package Model;
 
+import java.awt.*;
+import java.awt.geom.Point2D;
+
 public class Bola {
-    double x = 0, y = 0;
-    double vx = 0, vy = 0;
+    private Point2D.Double posicao;
+    private double vx = 0, vy = 0;
     double radius = 2.0;
 
     private static final double VELOCIDADE_MAXIMA = 650.0; // 6.5 m/s em cm/s
@@ -23,24 +26,20 @@ public class Bola {
         }
     }
 
+    public Bola() {
+        this.posicao = new Point2D.Double(0.0, 0.0);
+    }
+
+    public Point2D.Double getPosicao() {
+        return posicao;
+    }
+
+    public void setPosicao(double x, double y) {
+        this.posicao.setLocation(x, y);
+    }
+
     public double getVelocidade() {
         return Math.hypot(vx, vy);
-    }
-
-    public double getX() {
-        return x;
-    }
-
-    public void setX(double x) {
-        this.x = x;
-    }
-
-    public double getY() {
-        return y;
-    }
-
-    public void setY(double y) {
-        this.y = y;
     }
 
     public double getVx() {

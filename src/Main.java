@@ -7,6 +7,10 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 
 public class Main {
+    public enum Ferramenta { NENHUMA, COLOCAR_BOLA, CHUTAR }
+
+    public static Ferramenta ferramentaAtual = Ferramenta.NENHUMA;
+
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             JFrame frame = new JFrame("SSL Simulator Engine");
@@ -23,6 +27,9 @@ public class Main {
 
             JPanel painelControle = criarPainelControle(mundo, campo);
             frame.add(painelControle, BorderLayout.SOUTH);
+
+            JPanel menuLateral = criarMenuLateral();
+            frame.add(menuLateral, BorderLayout.EAST);
 
             Timer gameLoop = new Timer(16, e -> {
                 mundo.updatePhysics(0.016);
@@ -89,9 +96,30 @@ public class Main {
             public void mousePressed(MouseEvent e) {
                 double cartX = getCartX(e.getX(), campo);
                 double cartY = getCartY(e.getY(), campo);
-                if (Math.hypot(cartX - mundo.getBola().getPosicao().getX(), cartY - mundo.getBola().getPosicao().getY()) < 15) {
-                    campo.showAim = true;
-                    mundo.getBola().aplicarForca(0, 0);
+
+                if (ferramentaAtual == Ferramenta.COLOCAR_BOLA) {
+                    // Teleporta a bola e zera a inércia
+                    mundo.getBola().setPosicao(cartX, cartY);
+                    mundo.getBola().setVx(0);
+                    mundo.getBola().setVy(0);
+
+                    // Reseta a ferramenta após o uso
+                    ferramentaAtual = Ferramenta.NENHUMA;
+
+                } else if (ferramentaAtual == Ferramenta.CHUTAR) {
+                    // Calcula o vetor entre o clique e a bola
+                    double dx = cartX - mundo.getBola().getPosicao().getX();
+                    double dy = cartY - mundo.getBola().getPosicao().getY();
+
+                    mundo.getBola().aplicarForca(dx * 2.0, dy * 2.0);
+
+                    ferramentaAtual = Ferramenta.NENHUMA;
+
+                } else {
+                    if (Math.hypot(cartX - mundo.getBola().getPosicao().getX(), cartY - mundo.getBola().getPosicao().getY()) < 15) {
+                        campo.showAim = true;
+                        mundo.getBola().aplicarForca(0, 0);
+                    }
                 }
             }
             @Override
@@ -126,6 +154,28 @@ public class Main {
         campo.addMouseListener(mouse);
         campo.addMouseMotionListener(mouse);
         campo.addMouseWheelListener(mouse);
+    }
+
+    private static JPanel criarMenuLateral() {
+        JPanel painel = new JPanel();
+        painel.setLayout(new GridLayout(6, 1, 10, 10)); // Grid para empilhar os botões
+        painel.setBackground(new Color(40, 40, 40));
+        painel.setBorder(BorderFactory.createEmptyBorder(20, 10, 20, 10));
+
+        JLabel lblTitulo = criaLabelBranca("Ferramentas:");
+
+        JButton btnColocarBola = new JButton("Posicionar Bola");
+        JButton btnChutar = new JButton("Dar um Chute");
+
+        // Ao clicar nos botões, mudamos apenas a variável de estado
+        btnColocarBola.addActionListener(e -> ferramentaAtual = Ferramenta.COLOCAR_BOLA);
+        btnChutar.addActionListener(e -> ferramentaAtual = Ferramenta.CHUTAR);
+
+        painel.add(lblTitulo);
+        painel.add(btnColocarBola);
+        painel.add(btnChutar);
+
+        return painel;
     }
 
     private static double getCartX(int screenX, Campo campo) {

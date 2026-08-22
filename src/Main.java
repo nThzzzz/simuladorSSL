@@ -1,187 +1,185 @@
-import Engine.Mundo;
-import View.Campo;
+import app.Janela;
+import app.Rede;
+import core.SimClock;
+import log.ConfigLog;
+import model.Geometria;
+import model.ParametrosFisica;
+import rede.ConfigRede;
+import sim.ControleLocal;
+import sim.Simulacao;
+import sim.VisaoLocal;
+import visao.FonteDeVisao;
 
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import javax.swing.SwingUtilities;
+import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
-public class Main {
-    public enum Ferramenta { NENHUMA, COLOCAR_BOLA, CHUTAR }
+/**
+ * Simulador SSL 2D -- um programa so, no mesmo papel do grSim.
+ *
+ * <pre>
+ *   java Main                  janela + publica visao na rede
+ *   java Main --sem-rede       janela sem tocar na rede
+ *   java Main --headless ...   sem janela e sem rede: gera dataset o mais rapido possivel
+ * </pre>
+ *
+ * <p>O simulador nao tem logica de jogo nenhuma: sem um software de time
+ * conectado nas portas de {@code RobotControl}, os robos ficam parados -- igual
+ * ao grSim. O modo headless nao publica de proposito, porque roda centenas de
+ * vezes mais rapido que o tempo real e inundaria o multicast.
+ */
+public final class Main {
 
-    public static Ferramenta ferramentaAtual = Ferramenta.NENHUMA;
+    public static void main(String[] args) throws Exception {
+        Argumentos a;
+        try {
+            a = Argumentos.parse(args);
+        } catch (IllegalArgumentException | ArrayIndexOutOfBoundsException e) {
+            // Erro de uso nao merece stack trace: quem digitou errado quer ler
+            // o que esta errado, nao a pilha do parser.
+            String motivo = e instanceof ArrayIndexOutOfBoundsException
+                    ? "falta o valor do ultimo argumento" : e.getMessage();
+            System.err.println("erro: " + motivo);
+            System.err.println("use --ajuda para ver as opcoes");
+            System.exit(2);
+            return;
+        }
 
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            JFrame frame = new JFrame("SSL Simulator Engine");
-            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            frame.setLayout(new BorderLayout());
+        Simulacao sim = new Simulacao(Geometria.divisaoB(), ParametrosFisica.padrao(), a.dt());
+        sim.inicializarPartida("RoboFEI", a.robos(), "Adversario", a.robos());
+        Runtime.getRuntime().addShutdownHook(new Thread(sim::pararGravacao));
 
-            Mundo mundo = new Mundo(Campo.FIELD_WIDTH, Campo.FIELD_HEIGHT);
-
-            Campo campo = new Campo(mundo);
-            mundo.inicializarPartida("RoboFEI", 6, "Adversário", 6, campo);
-            frame.add(campo, BorderLayout.CENTER);
-
-            setupController(campo, mundo);
-
-            JPanel painelControle = criarPainelControle(mundo, campo);
-            frame.add(painelControle, BorderLayout.SOUTH);
-
-            JPanel menuLateral = criarMenuLateral();
-            frame.add(menuLateral, BorderLayout.EAST);
-
-            Timer gameLoop = new Timer(16, e -> {
-                mundo.updatePhysics(0.016);
-                campo.repaint();
-            });
-            gameLoop.start();
-
-            frame.pack();
-            frame.setLocationRelativeTo(null);
-            frame.setVisible(true);
-        });
+        if (a.headless()) rodarHeadless(sim, a);
+        else abrirJanela(sim, a);
     }
 
-    private static JPanel criarPainelControle(Mundo mundo, Campo campo) {
-        JPanel painel = new JPanel();
-        painel.setBackground(new Color(40, 40, 40));
+    /** Geracao de dataset: sem janela, sem rede, o mais rapido que a maquina der. */
+    private static void rodarHeadless(Simulacao sim, Argumentos a) {
+        Path saida = a.saida() != null ? a.saida() : Path.of("logs", carimbo());
+        if (a.log().gravaAlgo()) sim.iniciarGravacao(saida, a.log());
 
-        JLabel lblAzul = new JLabel("Model.Time Azul:");
-        lblAzul.setForeground(new Color(60, 130, 255));
-        JTextField txtNomeAzul = new JTextField("RoboFEI", 8);
-        JTextField txtQtdAzul = new JTextField("6", 2);
+        long inicio = System.nanoTime();
+        sim.rodarHeadless(a.duracao());
+        long quadros = sim.getQuadrosGravados();
+        long eventos = sim.getEventosGravados();
+        sim.pararGravacao();
+        double segundos = (System.nanoTime() - inicio) / 1e9;
 
-        JLabel lblAmarelo = new JLabel("  Model.Time Amarelo:");
-        lblAmarelo.setForeground(new Color(255, 210, 0));
-        JTextField txtNomeAmarelo = new JTextField("Adversário", 8);
-        JTextField txtQtdAmarelo = new JTextField("6", 2);
+        System.out.printf("simulados %.1f s (%d quadros) em %.2f s reais  [%.0fx tempo real]%n",
+                a.duracao(), sim.getClock().getFrame(), segundos,
+                a.duracao() / Math.max(segundos, 1e-9));
 
-        JButton btnAtualizar = new JButton("Confirmar Alteração");
-
-        painel.add(lblAzul); painel.add(txtNomeAzul);
-        painel.add(criaLabelBranca("Qtd:")); painel.add(txtQtdAzul);
-        painel.add(lblAmarelo); painel.add(txtNomeAmarelo);
-        painel.add(criaLabelBranca("Qtd:")); painel.add(txtQtdAmarelo);
-        painel.add(new JLabel("   "));
-        painel.add(btnAtualizar);
-
-        btnAtualizar.addActionListener(e -> {
-            try {
-                String nomeAzul = txtNomeAzul.getText();
-                int qtdAzul = Integer.parseInt(txtQtdAzul.getText());
-                String nomeAmarelo = txtNomeAmarelo.getText();
-                int qtdAmarelo = Integer.parseInt(txtQtdAmarelo.getText());
-
-                mundo.inicializarPartida(nomeAzul, qtdAzul, nomeAmarelo, qtdAmarelo, campo);
-
-                campo.repaint();
-            } catch (NumberFormatException ex) {
-                JOptionPane.showMessageDialog(null, "A quantidade de robôs deve ser um número inteiro!", "Erro", JOptionPane.ERROR_MESSAGE);
-            }
-        });
-
-        return painel;
+        if (!a.log().gravaAlgo()) System.out.println("log desligado (--sem-log)");
+        else System.out.printf("gravados %d quadros e %d eventos em %s%n",
+                quadros, eventos, saida.toAbsolutePath());
     }
 
-    private static JLabel criaLabelBranca(String texto) {
-        JLabel label = new JLabel(texto);
-        label.setForeground(Color.WHITE);
-        return label;
+    private static void abrirJanela(Simulacao sim, Argumentos a) throws Exception {
+        FonteDeVisao fonte = new VisaoLocal(sim);
+
+        Rede rede = null;
+        if (!a.semRede()) {
+            rede = new Rede(sim, fonte, a.rede());
+            rede.anunciar();
+            Rede aFechar = rede;
+            Runtime.getRuntime().addShutdownHook(new Thread(aFechar::close));
+        } else {
+            System.out.println("rede desligada (--sem-rede)");
+        }
+
+        Rede r = rede;
+        SwingUtilities.invokeLater(() -> Janela.abrir(
+                "SSL Simulator",
+                fonte,
+                new ControleLocal(sim),
+                sim,
+                () -> sim.tickTempoReal(5), // teto de 5 ticks: prefere perder tempo a travar
+                r));
     }
 
-    private static void setupController(Campo campo, Mundo mundo) {
-        MouseAdapter mouse = new MouseAdapter() {
-            @Override
-            public void mousePressed(MouseEvent e) {
-                double cartX = getCartX(e.getX(), campo);
-                double cartY = getCartY(e.getY(), campo);
+    static String carimbo() {
+        return LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+    }
 
-                if (ferramentaAtual == Ferramenta.COLOCAR_BOLA) {
-                    // Teleporta a bola e zera a inércia
-                    mundo.getBola().setPosicao(cartX, cartY);
-                    mundo.getBola().setVx(0);
-                    mundo.getBola().setVy(0);
+    record Argumentos(boolean headless, boolean semRede,
+                      double duracao, Path saida, double dt, int robos,
+                      ConfigLog log, ConfigRede rede) {
 
-                    // Reseta a ferramenta após o uso
-                    ferramentaAtual = Ferramenta.NENHUMA;
+        static Argumentos parse(String[] args) {
+            boolean headless = false, semRede = false;
+            double duracao = 60, dt = SimClock.DT_PADRAO;
+            Path saida = null;
+            int robos = 6;
+            boolean tracking = true, eventos = true, semLog = false;
+            int intervalo = 1;
+            ConfigRede rede = ConfigRede.padrao();
 
-                } else if (ferramentaAtual == Ferramenta.CHUTAR) {
-                    // Calcula o vetor entre o clique e a bola
-                    double dx = cartX - mundo.getBola().getPosicao().getX();
-                    double dy = cartY - mundo.getBola().getPosicao().getY();
-
-                    mundo.getBola().aplicarForca(dx * 2.0, dy * 2.0);
-
-                    ferramentaAtual = Ferramenta.NENHUMA;
-
-                } else {
-                    if (Math.hypot(cartX - mundo.getBola().getPosicao().getX(), cartY - mundo.getBola().getPosicao().getY()) < 15) {
-                        campo.showAim = true;
-                        mundo.getBola().aplicarForca(0, 0);
-                    }
+            for (int i = 0; i < args.length; i++) {
+                switch (args[i]) {
+                    case "--headless"       -> headless = true;
+                    case "--sem-rede"       -> semRede = true;
+                    case "--duracao"        -> duracao = Double.parseDouble(args[++i]);
+                    case "--saida"          -> saida = Path.of(args[++i]);
+                    case "--dt"             -> dt = Double.parseDouble(args[++i]);
+                    case "--robos"          -> robos = Integer.parseInt(args[++i]);
+                    case "--sem-log"        -> semLog = true;
+                    case "--sem-tracking"   -> tracking = false;
+                    case "--sem-eventos"    -> eventos = false;
+                    case "--log-intervalo"  -> intervalo = Integer.parseInt(args[++i]);
+                    case "--grupo"          -> rede = rede.comGrupo(args[++i]);
+                    case "--porta-visao"    -> rede = rede.comPortaVisao(Integer.parseInt(args[++i]));
+                    case "--porta-controle" -> rede = rede.comPortaControle(Integer.parseInt(args[++i]));
+                    case "--porta-azul"     -> rede = rede.comPortaAzul(Integer.parseInt(args[++i]));
+                    case "--porta-amarelo"  -> rede = rede.comPortaAmarelo(Integer.parseInt(args[++i]));
+                    case "--ajuda", "-h"    -> { ajuda(); System.exit(0); }
+                    default -> throw new IllegalArgumentException(
+                            "argumento desconhecido: " + args[i] + " (use --ajuda)");
                 }
             }
-            @Override
-            public void mouseDragged(MouseEvent e) {
-                campo.mouseX = e.getX(); campo.mouseY = e.getY();
-                if (campo.showAim) {
-                    campo.dragX = getCartX(e.getX(), campo);
-                    campo.dragY = getCartY(e.getY(), campo);
-                }
-            }
-            @Override
-            public void mouseReleased(MouseEvent e) {
-                if (campo.showAim) {
-                    campo.showAim = false;
-                    double forcaX = (campo.dragX - mundo.getBola().getPosicao().getX()) * 3.0;
-                    double forcaY = (campo.dragY - mundo.getBola().getPosicao().getY()) * 3.0;
-                    mundo.getBola().aplicarForca(forcaX, forcaY);
-                }
-            }
-            @Override
-            public void mouseMoved(MouseEvent e) {
-                campo.mouseX = e.getX(); campo.mouseY = e.getY();
-            }
-            @Override
-            public void mouseWheelMoved(java.awt.event.MouseWheelEvent e) {
-                double rot = e.getPreciseWheelRotation();
-                if (rot < 0) campo.zoomFactor *= (1.0 - (rot * 0.05));
-                else if (rot > 0) campo.zoomFactor /= (1.0 + (rot * 0.05));
-                campo.zoomFactor = Math.max(0.2, Math.min(campo.zoomFactor, 5.0));
-            }
-        };
-        campo.addMouseListener(mouse);
-        campo.addMouseMotionListener(mouse);
-        campo.addMouseWheelListener(mouse);
-    }
 
-    private static JPanel criarMenuLateral() {
-        JPanel painel = new JPanel();
-        painel.setLayout(new GridLayout(6, 1, 10, 10)); // Grid para empilhar os botões
-        painel.setBackground(new Color(40, 40, 40));
-        painel.setBorder(BorderFactory.createEmptyBorder(20, 10, 20, 10));
+            ConfigLog log = semLog ? ConfigLog.DESLIGADO
+                    : new ConfigLog(tracking, eventos, intervalo);
+            String problema = rede.problema();
+            if (problema != null) throw new IllegalArgumentException("rede: " + problema);
 
-        JLabel lblTitulo = criaLabelBranca("Ferramentas:");
+            return new Argumentos(headless, semRede, duracao, saida, dt, robos, log, rede);
+        }
 
-        JButton btnColocarBola = new JButton("Posicionar Bola");
-        JButton btnChutar = new JButton("Dar um Chute");
+        static void ajuda() {
+            System.out.println("""
+                    Simulador SSL 2D
 
-        // Ao clicar nos botões, mudamos apenas a variável de estado
-        btnColocarBola.addActionListener(e -> ferramentaAtual = Ferramenta.COLOCAR_BOLA);
-        btnChutar.addActionListener(e -> ferramentaAtual = Ferramenta.CHUTAR);
+                      java Main               janela + publica visao na rede
+                      java Main --sem-rede    janela, sem tocar na rede
+                      java Main --headless    sem janela e sem rede: gera dataset
 
-        painel.add(lblTitulo);
-        painel.add(btnColocarBola);
-        painel.add(btnChutar);
+                    Rede (publicada no modo janela)
+                      visao      -> 224.5.23.2:10006   SSL_WrapperPacket
+                      controle   <- porta 10300        SimulatorCommand
+                      robos      <- portas 10301/10302 RobotControl (azul/amarelo)
 
-        return painel;
-    }
+                      --grupo <ip>         grupo multicast da visao  (padrao 224.5.23.2)
+                      --porta-visao <n>    porta da visao            (padrao 10006)
+                      --porta-controle <n> porta de SimulatorCommand (padrao 10300)
+                      --porta-azul <n>     RobotControl azul         (padrao 10301)
+                      --porta-amarelo <n>  RobotControl amarelo      (padrao 10302)
 
-    private static double getCartX(int screenX, Campo campo) {
-        return (screenX - (Campo.MARGIN + Campo.FIELD_WIDTH / 2.0)) / campo.zoomFactor;
-    }
-    private static double getCartY(int screenY, Campo campo) {
-        return ((Campo.MARGIN + Campo.FIELD_HEIGHT / 2.0) - screenY) / campo.zoomFactor;
+                      as mesmas opcoes podem ser mudadas com a janela aberta,
+                      no botao "Configurar..." do painel Rede
+
+                    Simulacao
+                      --duracao <s>        tempo simulado no headless  (padrao 60)
+                      --dt <s>             passo de fisica             (padrao 1/60)
+                      --robos <n>          robos por equipe            (padrao 6)
+
+                    Log
+                      --saida <dir>        diretorio de saida  (padrao logs/<timestamp>)
+                      --sem-log            nao grava nada
+                      --sem-tracking       omite ball.csv e robots.csv
+                      --sem-eventos        omite events.jsonl
+                      --log-intervalo <n>  grava 1 a cada n quadros no tracking
+                    """);
+        }
     }
 }

@@ -1,6 +1,7 @@
 package teste;
 
 import core.Vec2;
+import model.Bola;
 import model.Cor;
 import model.Geometria;
 import model.ParametrosFisica;
@@ -60,8 +61,7 @@ public final class AutotesteRede {
         sim.inicializarPartida("Azuis", 6, "Amarelos", 6);
 
         FonteDeVisao fonte = new VisaoLocal(sim);
-        ControladorExterno externo = new ControladorExterno();
-        sim.setControladorExterno(externo);
+        ControladorExterno externo = sim.getControladorExterno();
 
         try (PublicadorVisao pub = new PublicadorVisao(GRUPO, PORTA_VISAO);
              MulticastSocket espia = abrirEspia();
@@ -167,10 +167,81 @@ public final class AutotesteRede {
             sim.setAposTick(null);
         }
 
+        chipPelaRede();
         reconfiguracao();
 
         System.out.printf("%n%d/%d verificacoes passaram%n", total - falhas, total);
         if (falhas > 0) System.exit(1);
+    }
+
+    /**
+     * Um chip comandado de fora: {@code kick_angle} entra, altura sai na visao.
+     *
+     * <p>Prova o par completo. O protocolo manda elevacao em graus, o simulador
+     * poe a bola no ar, e o {@code SSL_DetectionBall.z} devolve a altura para
+     * quem estiver assistindo.
+     */
+    private static void chipPelaRede() throws Exception {
+        System.out.println("\n  -- chip pela rede --");
+
+        Simulacao sim = new Simulacao(Geometria.divisaoB(), ParametrosFisica.padrao(), 1.0 / 60.0);
+        sim.inicializarPartida("A", 6, "B", 0);
+        FonteDeVisao fonte = new VisaoLocal(sim);
+        ControladorExterno externo = sim.getControladorExterno();
+
+        Robot chutador = sim.getMundo().getAzul().getRobo(0);
+        chutador.setPosicao(new Vec2(-3000, 2000));
+        chutador.setTheta(0);
+        // Bola encostada na boca do dribbler, para o chute engatar.
+        sim.getMundo().getBola().reposicionar(
+                chutador.pontoDribbler().mais(new Vec2(Bola.RAIO, 0)));
+
+        try (PublicadorVisao pub = new PublicadorVisao(GRUPO, 11206);
+             MulticastSocket espia = espiar(11206);
+             ReceptorDeComandosRobo _ =
+                     new ReceptorDeComandosRobo(11207, Cor.AZUL, externo); // so escuta
+             DatagramSocket emissor = new DatagramSocket()) {
+
+            sim.setAposTick(() -> {
+                try { pub.publicar(fonte.ultimoQuadro()); }
+                catch (IOException e) { throw new RuntimeException(e); }
+            });
+
+            enviar(emissor, 11207, RobotControl.newBuilder()
+                    .addRobotCommands(proto.sim.SslSimulationRobotControl.RobotCommand.newBuilder()
+                            .setId(0)
+                            .setKickSpeed(5.0f)      // m/s
+                            .setKickAngle(45f))      // graus
+                    .build().toByteArray());
+            Thread.sleep(300);
+
+            double alturaMaxima = 0;
+            for (int i = 0; i < 40; i++) {
+                sim.tick();
+                alturaMaxima = Math.max(alturaMaxima, sim.getMundo().getBola().getZ());
+                Thread.sleep(2);
+            }
+
+            verdadeiro("kick_angle do protocolo poe a bola no ar", alturaMaxima > 100);
+
+            // 5 m/s a 45 graus: vz0 = 3536 mm/s, apice = vz0^2/2g = 637 mm.
+            double vz0 = 5000 * Math.sin(Math.toRadians(45));
+            double apiceEsperado = vz0 * vz0 / (2 * ParametrosFisica.padrao().gravidade());
+            aproximado("altura atingida bate com o angulo comandado",
+                    alturaMaxima, apiceEsperado, apiceEsperado * 0.05);
+
+            double zMaximoNaVisao = 0;
+            for (SSL_WrapperPacket w : drenar(espia)) {
+                if (w.hasDetection() && w.getDetection().getBallsCount() > 0) {
+                    zMaximoNaVisao = Math.max(zMaximoNaVisao, w.getDetection().getBalls(0).getZ());
+                }
+            }
+            // A visao reporta a altura do CENTRO, entao vem um raio acima da base.
+            aproximado("SSL_DetectionBall.z transmite a altura",
+                    zMaximoNaVisao, alturaMaxima + Bola.RAIO, 60);
+
+            sim.setAposTick(null);
+        }
     }
 
     /**

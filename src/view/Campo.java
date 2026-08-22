@@ -47,6 +47,7 @@ public final class Campo extends JPanel {
     private static final Color COR_AZUL    = new Color(50, 120, 255);
     private static final Color COR_AMARELO = new Color(255, 205, 0);
     private static final Color COR_BOLA    = new Color(255, 140, 0);
+    private static final Color COR_BOLA_ALTA = new Color(255, 190, 90);
     private static final Color COR_CORPO   = new Color(38, 38, 42);
 
     /**
@@ -57,6 +58,10 @@ public final class Campo extends JPanel {
      */
     public static final double GANHO_CHUTE_PADRAO = 1.0;
 
+    /** Quanto cada mm de altura desloca a bola na tela, em mm de mundo. */
+    private static final double DESLOCAMENTO_ALTURA = 0.35;
+
+
     private final FonteDeVisao fonte;
 
     private double zoom = 1.0;
@@ -65,6 +70,7 @@ public final class Campo extends JPanel {
 
     private int mouseTelaX = -1, mouseTelaY = -1;
     private boolean mostrarMira = false;
+    private boolean mirandoChip = false;
     private Vec2 miraAlvo = Vec2.ZERO;
 
     // Selecao por identidade, nao por referencia: o quadro e recriado a cada
@@ -115,6 +121,9 @@ public final class Campo extends JPanel {
     public boolean isMostrarMira() { return mostrarMira; }
     public Vec2 getMiraAlvo()      { return miraAlvo; }
 
+    /** Se a mira atual representa um chip; muda cor e rotulo do vetor. */
+    public void setMirandoChip(boolean chip) { this.mirandoChip = chip; }
+
     public double getGanhoChute()           { return ganhoChute; }
     public void setGanhoChute(double ganho) { this.ganhoChute = ganho; }
 
@@ -137,7 +146,7 @@ public final class Campo extends JPanel {
     private double escalaBase(Geometria g) {
         if (getWidth() <= 0 || getHeight() <= 0) return 0.1;
         return Math.min(getWidth() / (g.limiteParedeX() * 2),
-                        getHeight() / (g.limiteParedeY() * 2)) * 0.96;
+                        getHeight() / (g.limiteParedeY() * 2)) * 0.98;
     }
 
     private AffineTransform transformMundo(Geometria g) {
@@ -243,30 +252,65 @@ public final class Campo extends JPanel {
         g.setTransform(anterior);
     }
 
+    /**
+     * Desenha a bola e, quando ela esta no ar, a sombra no gramado.
+     *
+     * <p>Num campo visto de cima nao ha profundidade para mostrar altura, entao
+     * usa-se a convencao de jogo 2D: a sombra fica na posicao real, no chao, e a
+     * bola sobe e cresce. Crescer junto com o deslocamento e o que distingue
+     * "bola alta" de "bola deslocada" -- so o deslocamento seria ambiguo.
+     *
+     * <p>A haste ligando as duas existe porque, sem ela, uma bola alta parece
+     * simplesmente estar em outro lugar. Ela ancora visualmente onde a bola vai
+     * cair.
+     */
     private void desenharBola(Graphics2D g, EstadoBola bola) {
-        double raio = Bola.RAIO;
-        Shape forma = new Ellipse2D.Double(
-                bola.posicao().x() - raio, bola.posicao().y() - raio, raio * 2, raio * 2);
+        double x = bola.posicao().x();
+        double y = bola.posicao().y();
+        double z = bola.z();
+        boolean noAr = z > 1;
 
-        g.setColor(COR_BOLA);
+        if (noAr) {
+            // Sombra encolhe e desbota com a altura, como se a camera estivesse
+            // acima: e o que faz o olho ler "subiu" em vez de "andou".
+            double raioSombra = Bola.RAIO * Math.max(0.45, 1 - z / 3000.0);
+            int alfa = (int) Math.max(35, 150 - z * 0.10);
+            g.setColor(new Color(0, 0, 0, alfa));
+            g.fill(new Ellipse2D.Double(x - raioSombra, y - raioSombra,
+                    raioSombra * 2, raioSombra * 2));
+        }
+
+        // No espaco de mundo o eixo Y aponta para cima na tela, entao somar em y
+        // levanta a bola visualmente.
+        double alturaDesenho = y + z * DESLOCAMENTO_ALTURA;
+        double raio = Bola.RAIO * (1 + z / 300.0);
+
+        if (noAr) {
+            g.setColor(new Color(255, 255, 255, 60));
+            g.setStroke(new BasicStroke(3f));
+            g.draw(new Line2D.Double(x, y, x, alturaDesenho - raio));
+        }
+
+        Shape forma = new Ellipse2D.Double(x - raio, alturaDesenho - raio, raio * 2, raio * 2);
+        g.setColor(noAr ? COR_BOLA_ALTA : COR_BOLA);
         g.fill(forma);
         g.setColor(new Color(0, 0, 0, 200));
-        g.setStroke(new BasicStroke(4f));
+        g.setStroke(new BasicStroke((float) (4 * (1 + z / 600.0))));
         g.draw(forma);
 
-        // Vetor de velocidade: projecao de 0,25 s a velocidade atual.
+        // Vetor de velocidade sai da posicao real, no chao: ele e horizontal.
         if (bola.rapidez() > 1) {
             Vec2 ponta = bola.posicao().mais(bola.velocidade().escala(0.25));
             g.setColor(new Color(255, 255, 255, 170));
             g.setStroke(new BasicStroke(6f));
-            g.draw(new Line2D.Double(bola.posicao().x(), bola.posicao().y(),
-                    ponta.x(), ponta.y()));
+            g.draw(new Line2D.Double(x, y, ponta.x(), ponta.y()));
         }
     }
 
     private void desenharMira(Graphics2D g, EstadoBola bola) {
         boolean saturado = saturado(bola);
-        g.setColor(saturado ? new Color(255, 60, 60, 230) : new Color(255, 190, 60, 220));
+        if (mirandoChip) g.setColor(new Color(120, 200, 255, 220));
+        else g.setColor(saturado ? new Color(255, 60, 60, 230) : new Color(255, 190, 60, 220));
         g.setStroke(new BasicStroke(10f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
         g.draw(new Line2D.Double(bola.posicao().x(), bola.posicao().y(),
                 miraAlvo.x(), miraAlvo.y()));
@@ -291,7 +335,8 @@ public final class Campo extends JPanel {
                 (bola.posicao().x() + miraAlvo.x()) / 2,
                 (bola.posicao().y() + miraAlvo.y()) / 2), meio);
 
-        String texto = String.format("%.2f m/s%s", velMs, saturado ? "  (teto)" : "");
+        String texto = String.format("%.2f m/s%s%s", velMs,
+                mirandoChip ? "  chip 45\u00b0" : "", saturado ? "  (teto)" : "");
         g.setFont(new Font("SansSerif", Font.BOLD, 12));
         FontMetrics fm = g.getFontMetrics();
         int w = fm.stringWidth(texto) + 12;
@@ -301,7 +346,8 @@ public final class Campo extends JPanel {
 
         g.setColor(new Color(0, 0, 0, 200));
         g.fillRoundRect(x, y, w, h, 6, 6);
-        g.setColor(saturado ? new Color(255, 110, 110) : Color.WHITE);
+        g.setColor(saturado ? new Color(255, 110, 110)
+                : mirandoChip ? new Color(150, 215, 255) : Color.WHITE);
         g.drawString(texto, x + 6, y + fm.getAscent() + 2);
     }
 
@@ -344,8 +390,11 @@ public final class Campo extends JPanel {
         g.setFont(new Font("SansSerif", Font.BOLD, 13));
         g.setColor(Color.WHITE);
 
-        g.drawString(String.format("bola  %.2f m/s%s", q.bola().rapidez() / 1000.0,
-                q.bola().deslizando() ? "  (deslizando)" : ""), 16, 24);
+        String estado = q.bola().noAr()
+                ? String.format("  no ar, %.0f mm", q.bola().z())
+                : q.bola().deslizando() ? "  (deslizando)" : "";
+        g.drawString(String.format("bola  %.2f m/s%s",
+                q.bola().rapidez() / 1000.0, estado), 16, 24);
         g.drawString(String.format("t  %.2f s   quadro %d", q.tempo(), q.frame()), 16, 44);
         g.drawString(String.format("%s %d  x  %d %s",
                 q.nomeAzul(), q.quantidade(Cor.AZUL),

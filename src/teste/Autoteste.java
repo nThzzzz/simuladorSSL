@@ -1,6 +1,9 @@
 package teste;
 
 import core.Angulo;
+import demo.Cenarios;
+import demo.ExecutorDeCenario;
+import demo.Roteiro;
 import core.Vec2;
 import engine.FisicaBola;
 import engine.Mundo;
@@ -38,6 +41,17 @@ public final class Autoteste {
         roboSaturaNaVelocidadeMaxima();
         comandoLocalViraMovimentoGlobal();
         roboRespeitaOmegaMaximo();
+        chipAtingeOApiceAnalitico();
+        chipCaiNaDistanciaPrevista();
+        chipIndependenteDeDt();
+        chipPassaPorCimaDoRobo();
+        chipBaixoAindaColide();
+        chipAssentaDepoisDeQuicar();
+        dribblerNaoPegaBolaNoAr();
+        cenarioChuteChegaAoGol();
+        cenarioChipPassaPorCimaEEhRecebido();
+        cenarioConducaoMantemAPosse();
+        semRollerABolaFicaParaTras();
         colisaoRoboRoboConservaMomento();
         formacaoCabeNoCampo();
         formacaoEhCruzApontandoParaOCentro();
@@ -222,6 +236,249 @@ public final class Autoteste {
 
         verdadeiro("formacao: todo robo encara o centro do campo", encarando);
         verdadeiro("formacao: todo robo cai sobre um braco da cruz", naCruz);
+    }
+
+    // --------------------------------------------------------------- cenarios
+
+    /** Roda um cenario por {@code segundos} e devolve a simulacao para inspecao. */
+    private static Simulacao rodarCenario(Roteiro roteiro, double segundos) {
+        Simulacao sim = Simulacao.padrao();
+        sim.inicializarPartida("A", 6, "B", 6);
+        ExecutorDeCenario executor =
+                new ExecutorDeCenario(sim, sim.getControladorExterno());
+        executor.selecionar(roteiro);
+        sim.setAntesTick(() -> executor.tick(sim.getClock().getDt()));
+
+        long passos = Math.round(segundos / sim.getClock().getDt());
+        for (long i = 0; i < passos; i++) sim.tick();
+        return sim;
+    }
+
+    private static void cenarioChuteChegaAoGol() {
+        Simulacao sim = Simulacao.padrao();
+        sim.inicializarPartida("A", 6, "B", 6);
+        ExecutorDeCenario executor =
+                new ExecutorDeCenario(sim, sim.getControladorExterno());
+        executor.selecionar(Cenarios.chuteNoGol());
+        sim.setAntesTick(() -> executor.tick(sim.getClock().getDt()));
+
+        double xMaximo = -9999;
+        for (int i = 0; i < 60 * 4; i++) {
+            sim.tick();
+            xMaximo = Math.max(xMaximo, sim.getMundo().getBola().getPosicao().x());
+        }
+        verdadeiro("cenario chute no gol: a bola cruza a linha de fundo adversaria",
+                xMaximo > sim.getMundo().getGeometria().meioComprimento());
+    }
+
+    /** O chip tem de subir acima do robo E terminar dominado pelo receptor. */
+    private static void cenarioChipPassaPorCimaEEhRecebido() {
+        Simulacao sim = Simulacao.padrao();
+        sim.inicializarPartida("A", 6, "B", 6);
+        ExecutorDeCenario executor =
+                new ExecutorDeCenario(sim, sim.getControladorExterno());
+        executor.selecionar(Cenarios.passeComChip(
+                sim.getMundo().getParametros().gravidade()));
+        sim.setAntesTick(() -> executor.tick(sim.getClock().getDt()));
+
+        double alturaMaxima = 0;
+        boolean recebeu = false;
+        for (int i = 0; i < 60 * 5; i++) {
+            sim.tick();
+            alturaMaxima = Math.max(alturaMaxima, sim.getMundo().getBola().getZ());
+            if (sim.getMundo().getAzul().getRobo(1).temBolaNoDribbler()) recebeu = true;
+        }
+        verdadeiro("cenario chip: sobe bem acima do teto do robo",
+                alturaMaxima > Robot.ALTURA * 2);
+        verdadeiro("cenario chip: o receptor domina a bola", recebeu);
+    }
+
+    /**
+     * A conducao tem de sobreviver a freada seca e a marcha a re.
+     *
+     * <p>Andar para frente ou em circulo nao prova nada: a bola acompanha por
+     * inercia mesmo sem dribbler. O que separa "segurando" de "empurrando" e
+     * parar de repente e depois inverter o sentido.
+     */
+    private static void cenarioConducaoMantemAPosse() {
+        Simulacao sim = Simulacao.padrao();
+        sim.inicializarPartida("A", 6, "B", 6);
+        ExecutorDeCenario executor =
+                new ExecutorDeCenario(sim, sim.getControladorExterno());
+        executor.selecionar(Cenarios.conducaoComRoller());
+        sim.setAntesTick(() -> executor.tick(sim.getClock().getDt()));
+
+        Robot condutor = sim.getMundo().getAzul().getRobo(0);
+        boolean perdeu = false;
+        double maiorAfastamento = 0;
+
+        // Ate 8,4 s: toda a sequencia menos a soltura deliberada aos 9,0 s.
+        for (int i = 0; i < (int) (8.4 * 60); i++) {
+            sim.tick();
+            if (sim.getClock().getTempo() < 0.6) continue; // deixa engatar
+            if (!condutor.temBolaNoDribbler()) perdeu = true;
+            maiorAfastamento = Math.max(maiorAfastamento,
+                    sim.getMundo().getBola().getPosicao().distancia(condutor.pontoDribbler()));
+        }
+
+        verdadeiro("cenario conducao: nao perde a bola em nenhuma manobra", !perdeu);
+        aproximado("cenario conducao: a bola nunca se solta da boca",
+                maiorAfastamento, Bola.RAIO, 5);
+    }
+
+    /**
+     * O contraste que da sentido ao cenario: os mesmos movimentos sem o roller.
+     *
+     * <p>Se a bola acompanhasse do mesmo jeito com o dribbler desligado, o
+     * cenario nao estaria demonstrando coisa alguma.
+     */
+    private static void semRollerABolaFicaParaTras() {
+        Simulacao sim = Simulacao.padrao();
+        sim.inicializarPartida("A", 1, "B", 0);
+        Robot r = sim.getMundo().getAzul().getRobo(0);
+        r.setPosicao(new Vec2(-3000, 0));
+        r.setTheta(0);
+        sim.getMundo().reposicionarBola(
+                r.pontoDribbler().mais(new Vec2(Bola.RAIO, 0)));
+
+        // Mesma abertura do cenario: acelera 1,4 s e depois da re, sem dribbler.
+        r.setComando(RobotCommand.mover(1500, 0, 0));
+        for (int i = 0; i < (int) (1.4 * 60); i++) sim.getMundo().passo(1.0 / 60.0);
+        r.setComando(RobotCommand.mover(-1200, 0, 0));
+        for (int i = 0; i < (int) (1.4 * 60); i++) sim.getMundo().passo(1.0 / 60.0);
+
+        // Com o roller a bola fica a 22 mm da boca; sem ele, perto de 1 m. O
+        // limiar e folgado de proposito: o que importa e a ordem de grandeza,
+        // nao o valor exato, que depende de quanto atrito a bola pega no caminho.
+        double distancia = sim.getMundo().getBola().getPosicao().distancia(r.pontoDribbler());
+        verdadeiro("sem roller: a mesma manobra deixa a bola para tras",
+                distancia > 500);
+    }
+
+    // ------------------------------------------------------------------- chip
+
+    /** Altura maxima tem de bater com vz0^2 / 2g. */
+    private static void chipAtingeOApiceAnalitico() {
+        double vz0 = velocidadeVertical(6500, 45);
+        double esperado = vz0 * vz0 / (2 * ParametrosFisica.padrao().gravidade());
+        aproximado("chip: apice bate com a analitica",
+                voo(6500, 45, 1.0 / 600.0).apice(), esperado, esperado * 0.01);
+    }
+
+    /** Alcance ate o primeiro toque: sem arrasto, e simplesmente vh * 2*vz0/g. */
+    private static void chipCaiNaDistanciaPrevista() {
+        double g = ParametrosFisica.padrao().gravidade();
+        double vz0 = velocidadeVertical(6500, 45);
+        double vh = velocidadeHorizontal(6500, 45);
+        double esperado = vh * (2 * vz0 / g);
+        aproximado("chip: alcance ate o primeiro toque bate com a analitica",
+                voo(6500, 45, 1.0 / 600.0).primeiroToque(), esperado, esperado * 0.01);
+    }
+
+    /**
+     * O quique tem de cair no mesmo lugar a 60 Hz e a 600 Hz.
+     *
+     * <p>E o que justifica resolver o instante do toque dentro do passo: grudar
+     * o quique na borda do quadro faria o alcance depender da taxa.
+     */
+    private static void chipIndependenteDeDt() {
+        double a = voo(6500, 45, 1.0 / 60.0).primeiroToque();
+        double b = voo(6500, 45, 1.0 / 600.0).primeiroToque();
+        aproximado("chip: mesmo alcance a 60 Hz e a 600 Hz", a, b, b * 0.01);
+    }
+
+    private static void chipPassaPorCimaDoRobo() {
+        Simulacao sim = Simulacao.padrao();
+        sim.inicializarPartida("A", 1, "B", 0);
+        Robot r = sim.getMundo().getAzul().getRobo(0);
+        r.setPosicao(new Vec2(1500, 0));
+        r.setTheta(Math.PI);
+
+        Bola bola = sim.getMundo().getBola();
+        bola.reposicionar(Vec2.ZERO, 0, new Vec2(velocidadeHorizontal(6500, 45), 0),
+                velocidadeVertical(6500, 45));
+
+        for (int i = 0; i < 40; i++) sim.getMundo().passo(1.0 / 60.0);
+
+        verdadeiro("chip: passa por cima do robo em vez de bater nele",
+                bola.getPosicao().x() > 2500);
+    }
+
+    private static void chipBaixoAindaColide() {
+        Simulacao sim = Simulacao.padrao();
+        sim.inicializarPartida("A", 1, "B", 0);
+        Robot r = sim.getMundo().getAzul().getRobo(0);
+        r.setPosicao(new Vec2(600, 0));
+        r.setTheta(Math.PI);
+
+        Bola bola = sim.getMundo().getBola();
+        // Elevacao pequena: a bola nem chega aos 150 mm do teto do robo.
+        bola.reposicionar(Vec2.ZERO, 0, new Vec2(3000, 0), 300);
+
+        for (int i = 0; i < 40; i++) sim.getMundo().passo(1.0 / 60.0);
+
+        verdadeiro("chip raso: ainda bate no robo",
+                bola.getPosicao().x() < 600 || bola.getVelocidade().x() < 0);
+    }
+
+    private static void chipAssentaDepoisDeQuicar() {
+        Bola bola = new Bola();
+        bola.reposicionar(Vec2.ZERO, 0, new Vec2(2000, 0), 3000);
+        FisicaBola fisica = new FisicaBola(ParametrosFisica.padrao());
+
+        for (int i = 0; i < 60 * 30; i++) fisica.integrar(bola, 1.0 / 60.0);
+
+        verdadeiro("chip: assenta no chao depois dos quiques", !bola.estaNoAr());
+        aproximado("chip: para de vez", bola.getRapidez(), 0, 1);
+    }
+
+    private static void dribblerNaoPegaBolaNoAr() {
+        Simulacao sim = Simulacao.padrao();
+        sim.inicializarPartida("A", 1, "B", 0);
+        Robot r = sim.getMundo().getAzul().getRobo(0);
+        r.setPosicao(Vec2.ZERO);
+        r.setTheta(0);
+        r.setComando(new RobotCommand(0, 0, 0, 0, 0, true)); // dribbler ligado
+
+        Bola bola = sim.getMundo().getBola();
+        // Exatamente na boca do dribbler, mas a 300 mm de altura.
+        bola.reposicionar(r.pontoDribbler().mais(new Vec2(Bola.RAIO, 0)), 300,
+                Vec2.ZERO, 0);
+
+        sim.getMundo().passo(1.0 / 60.0);
+        verdadeiro("dribbler: nao captura bola que passa por cima",
+                !r.temBolaNoDribbler());
+    }
+
+    private record Voo(double apice, double primeiroToque) {}
+
+    /** Solta um chip e mede altura maxima e onde ele bate no chao pela primeira vez. */
+    private static Voo voo(double velocidade, double graus, double dt) {
+        Bola bola = new Bola();
+        bola.lancar(new Vec2(velocidadeHorizontal(velocidade, graus), 0),
+                velocidadeVertical(velocidade, graus));
+        FisicaBola fisica = new FisicaBola(ParametrosFisica.padrao());
+
+        double apice = 0;
+        double primeiroToque = -1;
+        double vzAnterior = bola.getVz();
+
+        for (int i = 0; i < (int) (10 / dt) && primeiroToque < 0; i++) {
+            fisica.integrar(bola, dt);
+            apice = Math.max(apice, bola.getZ());
+            // O quique inverte o sinal da velocidade vertical.
+            if (vzAnterior < 0 && bola.getVz() > 0) primeiroToque = bola.getPosicao().x();
+            vzAnterior = bola.getVz();
+        }
+        return new Voo(apice, primeiroToque);
+    }
+
+    private static double velocidadeHorizontal(double v, double graus) {
+        return v * Math.cos(Math.toRadians(graus));
+    }
+
+    private static double velocidadeVertical(double v, double graus) {
+        return v * Math.sin(Math.toRadians(graus));
     }
 
     // ------------------------------------------------------------------ apoio

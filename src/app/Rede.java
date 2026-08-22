@@ -38,7 +38,7 @@ public final class Rede implements AutoCloseable {
 
     private final FonteDeVisao fonte;
     private final CanalDeControle destinoDeControle;
-    private final ControladorExterno externo = new ControladorExterno();
+    private final ControladorExterno externo;
 
     private ConfigRede config;
     private volatile PublicadorVisao visao;
@@ -49,7 +49,7 @@ public final class Rede implements AutoCloseable {
     public Rede(Simulacao sim, FonteDeVisao fonte, ConfigRede config) throws IOException {
         this.fonte = fonte;
         this.destinoDeControle = new ControleLocal(sim);
-        sim.setControladorExterno(externo);
+        this.externo = sim.getControladorExterno();
 
         abrir(config);
 

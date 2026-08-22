@@ -1,10 +1,14 @@
 package app;
 
 import core.Vec2;
+import demo.Cenarios;
+import demo.ExecutorDeCenario;
+import demo.Roteiro;
 import log.ConfigLog;
 import model.Cor;
 import model.ParametrosFisica;
 import model.Robot;
+import model.RobotCommand;
 import sim.ConsoleLocal;
 import view.Campo;
 import visao.CanalDeControle;
@@ -16,6 +20,7 @@ import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -38,6 +43,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
 import java.nio.file.Path;
+import java.util.List;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -59,7 +65,8 @@ public final class Janela {
     private static final Color APAGADO = new Color(150, 150, 160);
 
     private enum Ferramenta {
-        NENHUMA("Arrastar / chutar"),
+        NENHUMA("Arrastar / chutar rasteiro"),
+        CHUTAR_ALTO("Arrastar / chutar alto (chip)"),
         POSICIONAR_BOLA("Posicionar bola"),
         SELECIONAR_ROBO("Inspecionar robo");
 
@@ -73,16 +80,18 @@ public final class Janela {
     private final ConsoleLocal console;
     private final Campo campo;
     private final Rede rede;
+    private final ExecutorDeCenario cenarios;
 
     private Ferramenta ferramenta = Ferramenta.NENHUMA;
     private JLabel statusFerramenta;
 
     private Janela(FonteDeVisao fonte, CanalDeControle controle, ConsoleLocal console,
-                   Rede rede) {
+                   Rede rede, ExecutorDeCenario cenarios) {
         this.fonte = fonte;
         this.controle = controle;
         this.console = console;
         this.rede = rede;
+        this.cenarios = cenarios;
         this.campo = new Campo(fonte);
     }
 
@@ -91,10 +100,12 @@ public final class Janela {
      *
      * @param aCadaQuadro roda antes de cada repaint: avanca a fisica e publica
      * @param rede        presenca na rede, ou {@code null} se rodando offline
+     * @param cenarios     tocador de cenarios de teste
      */
     public static JFrame abrir(String titulo, FonteDeVisao fonte, CanalDeControle controle,
-                               ConsoleLocal console, Runnable aCadaQuadro, Rede rede) {
-        Janela j = new Janela(fonte, controle, console, rede);
+                               ConsoleLocal console, Runnable aCadaQuadro, Rede rede,
+                               ExecutorDeCenario cenarios) {
+        Janela j = new Janela(fonte, controle, console, rede, cenarios);
         return j.montar(titulo, aCadaQuadro);
     }
 
@@ -145,8 +156,9 @@ public final class Janela {
                         selecionar(Ferramenta.NENHUMA);
                     }
                     case SELECIONAR_ROBO -> campo.selecionar(roboSob(p));
-                    case NENHUMA -> {
+                    case NENHUMA, CHUTAR_ALTO -> {
                         if (p.distancia(campo.quadro().bola().posicao()) < 250) {
+                            campo.setMirandoChip(ferramenta == Ferramenta.CHUTAR_ALTO);
                             campo.setMira(true, p);
                         }
                     }
@@ -171,8 +183,20 @@ public final class Janela {
             public void mouseReleased(MouseEvent e) {
                 if (!campo.isMostrarMira()) return;
                 campo.setMira(false, null);
+
                 Vec2 bola = campo.quadro().bola().posicao();
-                controle.reposicionarBola(bola, campo.velocidadeDeMira(bola));
+                Vec2 impulso = campo.velocidadeDeMira(bola);
+
+                if (ferramenta == Ferramenta.CHUTAR_ALTO) {
+                    // A elevacao reparte a velocidade mirada entre plano e vertical,
+                    // igual ao chutador do robo: mirar mais longe sobe mais alto.
+                    double elevacao = RobotCommand.ANGULO_CHIP_PADRAO;
+                    controle.reposicionarBola(bola, 0,
+                            impulso.escala(Math.cos(elevacao)),
+                            impulso.norma() * Math.sin(elevacao));
+                } else {
+                    controle.reposicionarBola(bola, impulso);
+                }
             }
 
             @Override
@@ -253,6 +277,8 @@ public final class Janela {
         painel.add(statusFerramenta);
 
         painel.add(Box.createVerticalStrut(20));
+        painel.add(painelCenarios());
+        painel.add(Box.createVerticalStrut(20));
         painel.add(painelLog());
         painel.add(Box.createVerticalStrut(20));
         painel.add(painelFisica());
@@ -262,6 +288,64 @@ public final class Janela {
         painel.add(Box.createVerticalStrut(20));
         painel.add(rotulo("<html>botao direito arrasta<br>scroll aplica zoom</html>", APAGADO));
         painel.add(Box.createVerticalGlue());
+        return painel;
+    }
+
+    private static final String NENHUM = "(nenhum)";
+
+    private JPanel painelCenarios() {
+        JPanel painel = coluna();
+        painel.add(titulo("Cenario de teste"));
+        painel.add(rotulo("<html><i>roteiro fixo; faz o papel de<br>"
+                + "um software de time conectado</i></html>", APAGADO));
+        painel.add(Box.createVerticalStrut(6));
+
+        List<Roteiro> disponiveis = Cenarios.todos(ParametrosFisica.padrao().gravidade());
+
+        JComboBox<Object> escolha = new JComboBox<>();
+        escolha.addItem(NENHUM);
+        for (Roteiro r : disponiveis) escolha.addItem(r);
+        // O combo guarda o Roteiro inteiro, mas mostra so o nome.
+        escolha.setRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(
+                    javax.swing.JList<?> lista, Object valor, int i, boolean sel, boolean foco) {
+                Object texto = valor instanceof Roteiro r ? r.nome() : valor;
+                return super.getListCellRendererComponent(lista, texto, i, sel, foco);
+            }
+        });
+        escolha.setAlignmentX(Component.LEFT_ALIGNMENT);
+        escolha.setMaximumSize(new Dimension(Integer.MAX_VALUE, 26));
+
+        JLabel descricao = rotulo(" ", APAGADO);
+        JLabel progresso = rotulo(" ", new Color(150, 210, 150));
+
+        escolha.addActionListener(e -> {
+            Roteiro r = escolha.getSelectedItem() instanceof Roteiro sel ? sel : null;
+            cenarios.selecionar(r);
+            descricao.setText(r == null ? " "
+                    : "<html><body style='width:210px'>" + r.descricao() + "</body></html>");
+        });
+        if (cenarios.getRoteiro() != null) escolha.setSelectedItem(cenarios.getRoteiro());
+
+        JCheckBox recolher = caixa("recolher robos que atrapalham", true);
+        recolher.setToolTipText("A formacao inicial tem quatro robos sobre o eixo X, "
+                + "por onde os cenarios mandam a bola");
+        recolher.addActionListener(e -> cenarios.setRecolherRobos(recolher.isSelected()));
+
+        painel.add(escolha);
+        painel.add(Box.createVerticalStrut(4));
+        painel.add(recolher);
+        painel.add(descricao);
+        painel.add(progresso);
+
+        new Timer(200, e -> {
+            Roteiro r = cenarios.getRoteiro();
+            progresso.setText(r == null ? " "
+                    : String.format("ciclo %.1f / %.1f s",
+                            cenarios.getTempoDoCiclo(), r.duracao()));
+        }).start();
+
         return painel;
     }
 
@@ -335,49 +419,20 @@ public final class Janela {
         JPanel painel = coluna();
         painel.add(titulo("Fisica"));
 
+        JButton configurar = new JButton("Configurar...");
+        configurar.setAlignmentX(Component.LEFT_ALIGNMENT);
+        configurar.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+        configurar.addActionListener(e -> DialogoFisica.abrir(campo, controle,
+                () -> campo.quadro().parametros()));
+        painel.add(configurar);
+        painel.add(Box.createVerticalStrut(8));
+
+        // O ganho do chute fica aqui, e nao no dialogo de fisica: ele governa a
+        // sensibilidade do arrasto do mouse, nao o comportamento do mundo.
         JSlider ganhoChute = new JSlider(0, 1000);
-        painel.add(rotulo("<html><i>ajuste ao vivo; a troca<br>entra no log</i></html>", APAGADO));
-        painel.add(Box.createVerticalStrut(6));
-
-        ParametrosFisica base = ParametrosFisica.padrao();
-        JSlider restParede   = new JSlider(0, 1000);
-        JSlider restRobo     = new JSlider(0, 1000);
-        JSlider restRoboRobo = new JSlider(0, 1000);
-        JSlider atritoRol    = new JSlider(0, 1000);
-
-        Runnable aplicar = () -> controle.ajustarFisica(new ParametrosFisica(
-                base.gravidade(), base.atritoDeslizamento(),
-                valor(atritoRol, 0, 0.20), valor(restParede, 0, 1),
-                valor(restRobo, 0, 1), valor(restRoboRobo, 0, 1),
-                base.atritoTangencialRobo(), base.velocidadeMinimaBola(),
-                base.alcanceDribbler(), base.forcaDribbler()));
-
-        painel.add(linhaSlider(restParede, "quique na parede", 0, 1,
-                base.restituicaoParede(), "%.2f", aplicar));
-        painel.add(linhaSlider(restRobo, "quique no robo", 0, 1,
-                base.restituicaoRobo(), "%.2f", aplicar));
-        painel.add(linhaSlider(restRoboRobo, "quique robo-robo", 0, 1,
-                base.restituicaoRoboRobo(), "%.2f", aplicar));
-        painel.add(linhaSlider(atritoRol, "atrito de rolamento", 0, 0.20,
-                base.atritoRolamento(), "%.3f", aplicar));
         painel.add(linhaSlider(ganhoChute, "forca do chute (mouse)", 0.25, 3.0,
                 Campo.GANHO_CHUTE_PADRAO, "%.2f",
                 () -> campo.setGanhoChute(valor(ganhoChute, 0.25, 3.0))));
-
-        JButton restaurar = new JButton("Restaurar padrao");
-        restaurar.setAlignmentX(Component.LEFT_ALIGNMENT);
-        restaurar.setMaximumSize(new Dimension(Integer.MAX_VALUE, 26));
-        restaurar.addActionListener(e -> {
-            posicionar(restParede, base.restituicaoParede(), 0, 1);
-            posicionar(restRobo, base.restituicaoRobo(), 0, 1);
-            posicionar(restRoboRobo, base.restituicaoRoboRobo(), 0, 1);
-            posicionar(atritoRol, base.atritoRolamento(), 0, 0.20);
-            posicionar(ganhoChute, Campo.GANHO_CHUTE_PADRAO, 0.25, 3.0);
-            campo.setGanhoChute(Campo.GANHO_CHUTE_PADRAO);
-            aplicar.run();
-        });
-        painel.add(Box.createVerticalStrut(4));
-        painel.add(restaurar);
         return painel;
     }
 

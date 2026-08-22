@@ -75,11 +75,13 @@ public final class PublicadorVisao implements AutoCloseable {
 
         // pixel_x/pixel_y sao required no proto2 mas nao existem num simulador --
         // nao ha camera. O grSim tambem preenche com zero.
+        // z e a altura do CENTRO da bola, para ser coerente com x e y, que
+        // tambem sao do centro. Uma bola parada reporta o proprio raio.
         f.addBalls(SSL_DetectionBall.newBuilder()
                 .setConfidence(1f)
                 .setX((float) q.bola().posicao().x())
                 .setY((float) q.bola().posicao().y())
-                .setZ(0f)
+                .setZ((float) q.bola().zCentro())
                 .setPixelX(0f).setPixelY(0f));
 
         for (EstadoRobo r : q.robos()) {

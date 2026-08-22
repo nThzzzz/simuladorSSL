@@ -26,9 +26,10 @@ public final class Simulacao implements ConsoleLocal {
 
     private final Mundo mundo;
     private final SimClock clock;
-    private Controlador externo;
+    private final ControladorExterno externo = new ControladorExterno();
 
     private Logger logger = LoggerNulo.INSTANCIA;
+    private Runnable antesTick;
     private Runnable aposTick;
     private boolean gravando;
 
@@ -44,12 +45,14 @@ public final class Simulacao implements ConsoleLocal {
     public Mundo getMundo()                    { return mundo; }
     public SimClock getClock()                 { return clock; }
     /**
-     * Unica fonte de comandos: o software de time que se conecta pela rede.
+     * Unico ponto por onde um robo recebe comando.
      *
-     * <p>O simulador nao decide nada sozinho -- sem alguem conectado, os robos
-     * ficam parados, exatamente como no grSim.
+     * <p>Alimentado pelo {@code RobotControl} que chega pela rede e, quando ha um
+     * cenario de teste rodando, tambem por ele. O simulador nao decide nada
+     * sozinho: sem ninguem escrevendo aqui, os robos ficam parados, exatamente
+     * como no grSim.
      */
-    public void setControladorExterno(Controlador externo) { this.externo = externo; }
+    public ControladorExterno getControladorExterno() { return externo; }
     @Override
     public boolean estaGravando()              { return gravando; }
 
@@ -60,6 +63,14 @@ public final class Simulacao implements ConsoleLocal {
      * por quadro simulado, nao uma vez por quadro desenhado.
      */
     public void setAposTick(Runnable aposTick) { this.aposTick = aposTick; }
+
+    /**
+     * Gancho executado no inicio de cada tick, antes de qualquer decisao.
+     *
+     * <p>E onde o cenario de teste escreve os comandos, para que um comando
+     * marcado para um instante ja governe o movimento daquele mesmo quadro.
+     */
+    public void setAntesTick(Runnable antesTick) { this.antesTick = antesTick; }
 
     public void inicializarPartida(String nomeAzul, int qtdAzul,
                                    String nomeAmarelo, int qtdAmarelo) {
@@ -85,7 +96,8 @@ public final class Simulacao implements ConsoleLocal {
     public void tick() {
         double dt = clock.getDt();
         mundo.iniciarQuadro(clock.getFrame(), clock.getTempo());
-        if (externo != null) externo.decidir(mundo, dt);
+        if (antesTick != null) antesTick.run();
+        externo.decidir(mundo, dt);
         logger.quadro(mundo);
         mundo.passo(dt);
         logger.eventos(mundo.drenarEventos()); // drena sempre, mesmo sem gravar

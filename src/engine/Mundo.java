@@ -136,10 +136,17 @@ public final class Mundo {
 
     public Equipe getEquipe(Cor cor) { return cor == Cor.AZUL ? azul : amarelo; }
 
-    /** Reposiciona a bola e registra o evento -- usado pelas ferramentas da UI. */
+    /** Reposiciona a bola no gramado e registra o evento. */
     public void reposicionarBola(Vec2 p) {
-        bola.reposicionar(p);
-        registrar(TipoEvento.BOLA_REPOSICIONADA, Evento.dados("x", p.x(), "y", p.y()));
+        reposicionarBola(p, 0, Vec2.ZERO, 0);
+    }
+
+    /** Reposiciona a bola, possivelmente no ar e em movimento. */
+    public void reposicionarBola(Vec2 p, double z, Vec2 velocidade, double vz) {
+        bola.reposicionar(p, z, velocidade, vz);
+        registrar(TipoEvento.BOLA_REPOSICIONADA, Evento.dados(
+                "x", p.x(), "y", p.y(), "z", z,
+                "vx", velocidade.x(), "vy", velocidade.y(), "vz", vz));
     }
 
     /** Robo mais proximo de um ponto, opcionalmente restrito a uma cor. */

@@ -19,11 +19,9 @@ public final class ControleLocal implements CanalDeControle {
     }
 
     @Override
-    public void reposicionarBola(Vec2 posicao, Vec2 velocidade) {
-        sim.getMundo().reposicionarBola(posicao);
-        if (velocidade != null && velocidade.norma() > 0) {
-            sim.getMundo().getBola().lancar(velocidade);
-        }
+    public void reposicionarBola(Vec2 posicao, double z, Vec2 velocidade, double vz) {
+        sim.getMundo().reposicionarBola(posicao, z,
+                velocidade == null ? Vec2.ZERO : velocidade, vz);
     }
 
     @Override

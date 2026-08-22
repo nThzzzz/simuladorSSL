@@ -41,8 +41,10 @@ public final class VisaoLocal implements FonteDeVisao {
 
         Bola bola = mundo.getBola();
         cache = new EstadoMundo(mundo.getFrame(), mundo.getTempo(), mundo.getGeometria(),
+                mundo.getParametros(),
                 mundo.getAzul().getNome(), mundo.getAmarelo().getNome(),
-                new EstadoBola(bola.getPosicao(), bola.getVelocidade(), bola.estaDeslizando()),
+                new EstadoBola(bola.getPosicao(), bola.getZ(), bola.getVelocidade(),
+                        bola.getVz(), bola.estaDeslizando()),
                 robos);
         frameDoCache = mundo.getFrame();
         return cache;

@@ -3,6 +3,7 @@ package visao;
 import core.Vec2;
 import model.Cor;
 import model.Geometria;
+import model.ParametrosFisica;
 
 import java.util.List;
 
@@ -18,6 +19,7 @@ public record EstadoMundo(
         long frame,
         double tempo,
         Geometria geometria,
+        ParametrosFisica parametros,
         String nomeAzul,
         String nomeAmarelo,
         EstadoBola bola,
@@ -29,8 +31,8 @@ public record EstadoMundo(
 
     /** Quadro sem nada em campo, para antes do primeiro pacote chegar. */
     public static EstadoMundo vazio(Geometria geometria) {
-        return new EstadoMundo(0, 0, geometria, "Azul", "Amarelo",
-                EstadoBola.PARADA, List.of());
+        return new EstadoMundo(0, 0, geometria, ParametrosFisica.padrao(),
+                "Azul", "Amarelo", EstadoBola.PARADA, List.of());
     }
 
     public EstadoRobo robo(Cor cor, int id) {

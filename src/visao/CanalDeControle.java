@@ -16,8 +16,21 @@ import model.ParametrosFisica;
  */
 public interface CanalDeControle {
 
-    /** Teleporta a bola, opcionalmente com velocidade (equivale a um chute). */
-    void reposicionarBola(Vec2 posicao, Vec2 velocidade);
+    /** Teleporta a bola no gramado, opcionalmente com velocidade. */
+    default void reposicionarBola(Vec2 posicao, Vec2 velocidade) {
+        reposicionarBola(posicao, 0, velocidade, 0);
+    }
+
+    /**
+     * Teleporta a bola, possivelmente no ar.
+     *
+     * <p>Assinatura espelha o {@code TeleportBall} do protocolo, que tambem
+     * carrega z e vz.
+     *
+     * @param z  altura do ponto mais baixo da bola, em mm
+     * @param vz velocidade vertical, em mm/s
+     */
+    void reposicionarBola(Vec2 posicao, double z, Vec2 velocidade, double vz);
 
     void reiniciarPartida(String nomeAzul, int qtdAzul, String nomeAmarelo, int qtdAmarelo);
 

@@ -1,5 +1,8 @@
 import app.Janela;
 import app.Rede;
+import demo.Cenarios;
+import demo.ExecutorDeCenario;
+import demo.Roteiro;
 import core.SimClock;
 import log.ConfigLog;
 import model.Geometria;
@@ -12,6 +15,7 @@ import visao.FonteDeVisao;
 
 import javax.swing.SwingUtilities;
 import java.nio.file.Path;
+import java.util.List;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -50,8 +54,40 @@ public final class Main {
         sim.inicializarPartida("RoboFEI", a.robos(), "Adversario", a.robos());
         Runtime.getRuntime().addShutdownHook(new Thread(sim::pararGravacao));
 
+        ExecutorDeCenario cenarios =
+                new ExecutorDeCenario(sim, sim.getControladorExterno());
+        cenarios.selecionar(procurarCenario(a.cenario()));
+        sim.setAntesTick(() -> cenarios.tick(a.dt()));
+
         if (a.headless()) rodarHeadless(sim, a);
-        else abrirJanela(sim, a);
+        else abrirJanela(sim, a, cenarios);
+    }
+
+    /**
+     * Resolve o nome vindo da linha de comando; {@code null} deixa sem cenario.
+     *
+     * <p>A validacao acontece no parse dos argumentos, entao aqui o nome ja
+     * chega valido e nao ha caminho de erro.
+     */
+    static Roteiro procurarCenario(String nome) {
+        if (nome == null) return null;
+        for (Roteiro r : Cenarios.todos(ParametrosFisica.padrao().gravidade())) {
+            if (identificador(r).equals(nome)) return r;
+        }
+        throw new IllegalStateException("cenario nao validado no parse: " + nome);
+    }
+
+    private static List<String> nomesDeCenario() {
+        return Cenarios.todos(ParametrosFisica.padrao().gravidade())
+                .stream().map(Main::identificador).toList();
+    }
+
+    /** Nome do cenario em forma de opcao de linha de comando. */
+    public static String identificador(Roteiro r) {
+        return java.text.Normalizer.normalize(r.nome(), java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toLowerCase()
+                .replaceAll("[^a-z0-9]+", "-");
     }
 
     /** Geracao de dataset: sem janela, sem rede, o mais rapido que a maquina der. */
@@ -75,7 +111,8 @@ public final class Main {
                 quadros, eventos, saida.toAbsolutePath());
     }
 
-    private static void abrirJanela(Simulacao sim, Argumentos a) throws Exception {
+    private static void abrirJanela(Simulacao sim, Argumentos a, ExecutorDeCenario cenarios)
+            throws Exception {
         FonteDeVisao fonte = new VisaoLocal(sim);
 
         Rede rede = null;
@@ -95,19 +132,20 @@ public final class Main {
                 new ControleLocal(sim),
                 sim,
                 () -> sim.tickTempoReal(5), // teto de 5 ticks: prefere perder tempo a travar
-                r));
+                r, cenarios));
     }
 
     static String carimbo() {
         return LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
     }
 
-    record Argumentos(boolean headless, boolean semRede,
+    record Argumentos(boolean headless, boolean semRede, String cenario,
                       double duracao, Path saida, double dt, int robos,
                       ConfigLog log, ConfigRede rede) {
 
         static Argumentos parse(String[] args) {
             boolean headless = false, semRede = false;
+            String cenario = null;
             double duracao = 60, dt = SimClock.DT_PADRAO;
             Path saida = null;
             int robos = 6;
@@ -119,6 +157,7 @@ public final class Main {
                 switch (args[i]) {
                     case "--headless"       -> headless = true;
                     case "--sem-rede"       -> semRede = true;
+                    case "--cenario"        -> cenario = args[++i];
                     case "--duracao"        -> duracao = Double.parseDouble(args[++i]);
                     case "--saida"          -> saida = Path.of(args[++i]);
                     case "--dt"             -> dt = Double.parseDouble(args[++i]);
@@ -143,7 +182,13 @@ public final class Main {
             String problema = rede.problema();
             if (problema != null) throw new IllegalArgumentException("rede: " + problema);
 
-            return new Argumentos(headless, semRede, duracao, saida, dt, robos, log, rede);
+            if (cenario != null && !nomesDeCenario().contains(cenario)) {
+                throw new IllegalArgumentException("cenario desconhecido: " + cenario
+                        + "  (opcoes: " + String.join(", ", nomesDeCenario()) + ")");
+            }
+
+            return new Argumentos(headless, semRede, cenario, duracao, saida, dt,
+                    robos, log, rede);
         }
 
         static void ajuda() {
@@ -167,6 +212,10 @@ public final class Main {
 
                       as mesmas opcoes podem ser mudadas com a janela aberta,
                       no botao "Configurar..." do painel Rede
+
+                    Cenarios de teste
+                      --cenario <nome>     chute-no-gol | passe-com-chip | conducao-com-roller
+                                           sem isto, nada se move ate alguem conectar
 
                     Simulacao
                       --duracao <s>        tempo simulado no headless  (padrao 60)

@@ -4,6 +4,7 @@ package engine;
 public enum TipoEvento {
     PARTIDA_INICIADA,
     PARAMETROS_ALTERADOS,
+    CENARIO,
     BOLA_REPOSICIONADA,
     CHUTE,
     CHIP,

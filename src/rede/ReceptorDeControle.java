@@ -1,6 +1,7 @@
 package rede;
 
 import core.Vec2;
+import model.Bola;
 import proto.sim.SslSimulationControl.SimulatorCommand;
 import proto.sim.SslSimulationControl.TeleportBall;
 import visao.CanalDeControle;
@@ -55,10 +56,13 @@ public final class ReceptorDeControle implements AutoCloseable {
     private void aplicar(SimulatorCommand cmd) {
         if (!cmd.hasControl() || !cmd.getControl().hasTeleportBall()) return;
         TeleportBall t = cmd.getControl().getTeleportBall();
-        // Protocolo em metros, mundo em milimetros.
+        // Protocolo em metros, mundo em milimetros. O z do protocolo e a altura
+        // do centro da bola; aqui guardamos a da base, dai o desconto do raio.
+        double z = Math.max(0, t.getZ() * MM_POR_M - Bola.RAIO);
         destino.reposicionarBola(
-                new Vec2(t.getX() * MM_POR_M, t.getY() * MM_POR_M),
-                new Vec2(t.getVx() * MM_POR_M, t.getVy() * MM_POR_M));
+                new Vec2(t.getX() * MM_POR_M, t.getY() * MM_POR_M), z,
+                new Vec2(t.getVx() * MM_POR_M, t.getVy() * MM_POR_M),
+                t.getVz() * MM_POR_M);
     }
 
     @Override

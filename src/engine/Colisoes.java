@@ -117,13 +117,21 @@ public final class Colisoes {
 
             // --- Chute: consome a posse e lanca a bola na direcao frontal ---
             if (cmd.temChute() && (tinha || naZona)) {
-                double velocidade = Math.max(cmd.velChute(), cmd.velChip());
-                boolean chip = cmd.velChip() > 0;
+                double velocidade = cmd.velChute();
+                double elevacao = cmd.anguloChute();
+                boolean chip = cmd.ehChip();
 
-                Vec2 saida = Vec2.dePolar(velocidade, r.getTheta()).mais(r.getVelocidade());
+                // A elevacao reparte a velocidade do chutador entre o plano e a
+                // vertical; a componente do robo so entra na horizontal, porque
+                // o robo nao se move para cima.
+                Vec2 saida = Vec2.dePolar(velocidade * Math.cos(elevacao), r.getTheta())
+                        .mais(r.getVelocidade());
+                double vz = velocidade * Math.sin(elevacao);
+
                 bola.setPosicao(r.pontoDribbler().mais(
                         Vec2.dePolar(Bola.RAIO + EPS, r.getTheta())));
-                bola.lancar(saida);
+                bola.setZ(0);
+                bola.lancar(saida, vz);
 
                 if (tinha) {
                     r.setBolaNoDribbler(false);
@@ -134,6 +142,10 @@ public final class Colisoes {
                         "robo", r.chave(),
                         "velocidade_comandada", velocidade,
                         "velocidade_bola", bola.getRapidez(),
+                        "angulo_elevacao", elevacao,
+                        "vz", bola.getVz(),
+                        // Altura maxima prevista, util para conferir o chip no log.
+                        "apice", bola.getVz() * bola.getVz() / (2 * p.gravidade()),
                         "theta", r.getTheta(),
                         "bola_x", bola.getPosicao().x(),
                         "bola_y", bola.getPosicao().y()));
@@ -161,8 +173,15 @@ public final class Colisoes {
         }
     }
 
-    /** True se a bola esta a frente da boca, dentro do alcance do rolo. */
+    /**
+     * True se a bola esta a frente da boca, dentro do alcance do rolo.
+     *
+     * <p>A tolerancia vertical e o proprio raio da bola, e nao zero. O rolo tem
+     * altura: exigir {@code z == 0} faria uma bola que ainda vem saltitando baixo
+     * ser recusada e rebatida pela casca, quando na pratica o dribbler a domina.
+     */
     public boolean bolaNaZonaDribbler(Robot r, Bola bola) {
+        if (bola.getZ() > Bola.RAIO) return false;
         Vec2 local = bola.getPosicao().menos(r.getPosicao()).paraLocal(r.getTheta());
         double alcance = Robot.DIST_FACE_FRONTAL + Bola.RAIO + p.alcanceDribbler();
         return local.x() > 0 && local.x() <= alcance && Math.abs(local.y()) <= MEIA_BOCA;
@@ -174,6 +193,10 @@ public final class Colisoes {
         Bola bola = mundo.getBola();
         double somaRaios = Robot.RAIO + Bola.RAIO;
         double planoFace = Robot.DIST_FACE_FRONTAL + Bola.RAIO;
+
+        // Bola acima do teto do robo passa por cima: e para isso que serve o chip.
+        // O teste usa a base da bola, entao encostar de raspao ainda colide.
+        if (bola.getZ() >= Robot.ALTURA) return;
 
         for (Robot r : mundo.getRobos()) {
             if (r.temBolaNoDribbler()) continue; // o dribbler ja governa a bola
@@ -187,6 +210,9 @@ public final class Colisoes {
             if (naBoca && local.x() >= planoFace) continue; // ainda nao encostou na face
 
             // Velocidade RELATIVA: e ela que decide se ha aproximacao.
+            double velAntes = bola.getRapidez();
+            boolean rolava = !bola.estaDeslizando();
+
             Vec2 velRelLocal = bola.getVelocidade().menos(r.getVelocidade())
                     .paraLocal(r.getTheta());
 
@@ -214,7 +240,11 @@ public final class Colisoes {
 
             bola.setPosicao(r.getPosicao().mais(novaPosLocal.paraGlobal(r.getTheta())));
             Vec2 velGlobal = novaVelRelLocal.paraGlobal(r.getTheta()).mais(r.getVelocidade());
-            bola.lancar(velGlobal);
+            // Mesmo efeito do quique na parede: a bola inverte a translacao mas
+            // leva o giro consigo, e o atrito precisa reverte-lo antes de ela
+            // voltar a rolar. Sem isto a bola escapa do robo viva demais.
+            bola.rebater(velGlobal, bola.getVz(),
+                    rolamentoAposQuique(velAntes, rolava, p.restituicaoRobo()));
 
             mundo.registrar(TipoEvento.COLISAO_BOLA_ROBO, Evento.dados(
                     "robo", r.chave(),
@@ -225,6 +255,36 @@ public final class Colisoes {
         }
     }
 
+    /**
+     * Em que rapidez a bola volta a rolar depois de bater numa parede.
+     *
+     * <p>Um quique inverte a translacao mas nao o giro: a bola sai do contato
+     * girando ao contrario do proprio movimento, e o atrito tem de parar e
+     * reverter esse giro antes de ela voltar a rolar. Para uma esfera homogenea
+     * que chegava rolando, o deslize termina em {@code v0 * (5e - 2) / 7}.
+     *
+     * <p>Com a restituicao padrao de 0,5 isso deixa apenas 7% da velocidade de
+     * chegada, contra os 50% que sobrariam ignorando o giro -- era exatamente o
+     * que fazia a bola parecer quicar demais.
+     *
+     * <p>Duas simplificacoes: abaixo de e = 0,4 a conta da negativo, ou seja o
+     * giro venceria e a bola voltaria em direcao a parede; aqui ela apenas para.
+     * E num quique de raspao, onde so uma componente inverte, a formula e
+     * aproximacao, porque a componente tangencial segue rolando.
+     */
+    private static double rolamentoAposQuique(double velAntes, boolean rolava,
+                                              double restituicao) {
+        if (!rolava) return velAntes * restituicao * (5.0 / 7.0);
+        return Math.max(0, velAntes * (5 * restituicao - 2) / 7.0);
+    }
+
+    /**
+     * Quique nas paredes.
+     *
+     * <p>Simplificacao conhecida: a parede e tratada como infinitamente alta,
+     * entao um chip nunca sai do campo. Enquanto nao houver arbitro para repor a
+     * bola, deixa-la escapar significaria perde-la para sempre.
+     */
     private void bolaParede(Mundo mundo) {
         Bola bola = mundo.getBola();
         Geometria g = mundo.getGeometria();
@@ -233,6 +293,8 @@ public final class Colisoes {
 
         Vec2 pos = bola.getPosicao();
         Vec2 vel = bola.getVelocidade();
+        double velAntes = vel.norma();
+        boolean rolava = !bola.estaDeslizando();
         double x = pos.x(), y = pos.y(), vx = vel.x(), vy = vel.y();
         String parede = null;
 
@@ -247,7 +309,8 @@ public final class Colisoes {
         if (parede == null) return;
 
         bola.setPosicao(new Vec2(x, y));
-        bola.setVelocidade(new Vec2(vx, vy));
+        bola.rebater(new Vec2(vx, vy), bola.getVz(),
+                rolamentoAposQuique(velAntes, rolava, p.restituicaoParede()));
         mundo.registrar(TipoEvento.BOLA_PAREDE, Evento.dados(
                 "parede", parede, "x", x, "y", y, "vel", bola.getRapidez()));
     }

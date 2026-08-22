@@ -12,8 +12,8 @@ package model;
  * @param velTangencial mm/s no eixo frontal do robo (+x local = frente)
  * @param velNormal     mm/s no eixo lateral do robo (+y local = esquerda)
  * @param velAngular    rad/s, positivo no sentido anti-horario
- * @param velChute      mm/s do chute plano; 0 = sem chute neste quadro
- * @param velChip       mm/s do chute por elevacao; 0 = sem chip
+ * @param velChute      mm/s do chute; 0 = sem chute neste quadro
+ * @param anguloChute   elevacao do chute em radianos; 0 = rasteiro, >0 = chip
  * @param dribbler      true se o rolo dribbler esta acionado
  */
 public record RobotCommand(
@@ -21,22 +21,34 @@ public record RobotCommand(
         double velNormal,
         double velAngular,
         double velChute,
-        double velChip,
+        double anguloChute,
         boolean dribbler
 ) {
+    /** Elevacao tipica do mecanismo de chip de um robo da SSL. */
+    public static final double ANGULO_CHIP_PADRAO = Math.toRadians(45);
+
     public static final RobotCommand PARADO = new RobotCommand(0, 0, 0, 0, 0, false);
 
     public static RobotCommand mover(double velTangencial, double velNormal, double velAngular) {
         return new RobotCommand(velTangencial, velNormal, velAngular, 0, 0, false);
     }
 
-    public boolean temChute() { return velChute > 0 || velChip > 0; }
+    public boolean temChute() { return velChute > 0; }
+
+    /** True se o chute sai do chao. */
+    public boolean ehChip() { return velChute > 0 && anguloChute > 0; }
 
     public RobotCommand comChute(double velChute) {
-        return new RobotCommand(velTangencial, velNormal, velAngular, velChute, velChip, dribbler);
+        return new RobotCommand(velTangencial, velNormal, velAngular, velChute, 0, dribbler);
+    }
+
+    public RobotCommand comChip(double velChute, double anguloChute) {
+        return new RobotCommand(velTangencial, velNormal, velAngular,
+                velChute, anguloChute, dribbler);
     }
 
     public RobotCommand comDribbler(boolean ligado) {
-        return new RobotCommand(velTangencial, velNormal, velAngular, velChute, velChip, ligado);
+        return new RobotCommand(velTangencial, velNormal, velAngular,
+                velChute, anguloChute, ligado);
     }
 }

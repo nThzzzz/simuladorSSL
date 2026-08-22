@@ -14,6 +14,7 @@ public final class Robot {
 
     public static final double RAIO = 90.0;              // mm, envelope de 180 mm de diametro
     public static final double DIST_FACE_FRONTAL = 72.5; // mm, face plana do dribbler
+    public static final double ALTURA = 150.0;           // mm, teto do regulamento
     public static final double MASSA = 2.5;              // kg
 
     // Limites tipicos de um robo da SSL.

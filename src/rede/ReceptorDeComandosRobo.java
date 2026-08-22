@@ -19,8 +19,8 @@ import java.net.DatagramSocket;
  *
  * <p>{@code MoveLocalVelocity{forward, left, angular}} bate exatamente com o
  * {@link RobotCommand} daqui; so muda a unidade (m/s no protocolo, mm/s no
- * mundo). Os outros dois modos de movimento do protocolo -- velocidade global e
- * velocidade de roda -- ainda nao sao tratados.
+ * mundo). Os outros dois modos de movimento do protocolo, velocidade global e
+ * velocidade de roda, ainda nao sao tratados.
  */
 public final class ReceptorDeComandosRobo implements AutoCloseable {
 
@@ -69,18 +69,18 @@ public final class ReceptorDeComandosRobo implements AutoCloseable {
             w = m.getAngular();
         }
 
-        // No protocolo o chute e uma velocidade mais um angulo em graus; aqui sao
-        // dois campos separados. Angulo zero e chute rasteiro, o resto e chip.
-        double chute = 0, chip = 0;
+        // Chute e velocidade mais elevacao, igual ao protocolo; so muda a unidade
+        // do angulo (graus la, radianos aqui).
+        double chute = 0, elevacao = 0;
         if (c.hasKickSpeed() && c.getKickSpeed() > 0) {
-            if (c.getKickAngle() > 0) chip = c.getKickSpeed() * MM_POR_M;
-            else chute = c.getKickSpeed() * MM_POR_M;
+            chute = c.getKickSpeed() * MM_POR_M;
+            elevacao = Math.toRadians(c.getKickAngle());
         }
 
         // Dribbler e RPM no protocolo e booleano aqui.
         boolean dribbler = c.hasDribblerSpeed() && c.getDribblerSpeed() > 0;
 
-        return new RobotCommand(vt, vn, w, chute, chip, dribbler);
+        return new RobotCommand(vt, vn, w, chute, elevacao, dribbler);
     }
 
     @Override

@@ -96,9 +96,9 @@ public final class LoggerArquivo implements Logger {
         this.escritor.start();
 
         if (config.tracking()) {
-            enfileirar(DESTINO_BOLA, "t,frame,x,y,vx,vy,rapidez,deslizando");
+            enfileirar(DESTINO_BOLA, "t,frame,x,y,z,vx,vy,vz,rapidez,deslizando,no_ar");
             enfileirar(DESTINO_ROBOS, "t,frame,cor,id,x,y,theta,vx,vy,rapidez,omega,"
-                    + "cmd_vt,cmd_vn,cmd_w,cmd_kick,cmd_chip,cmd_drib,posse");
+                    + "cmd_vt,cmd_vn,cmd_w,cmd_kick,cmd_kick_ang,cmd_drib,posse");
         }
     }
 
@@ -193,10 +193,13 @@ public final class LoggerArquivo implements Logger {
         sb.append(t).append(',').append(frame).append(',')
           .append(Formato.compacto(bola.getPosicao().x())).append(',')
           .append(Formato.compacto(bola.getPosicao().y())).append(',')
+          .append(Formato.compacto(bola.getZ())).append(',')
           .append(Formato.compacto(bola.getVelocidade().x())).append(',')
           .append(Formato.compacto(bola.getVelocidade().y())).append(',')
+          .append(Formato.compacto(bola.getVz())).append(',')
           .append(Formato.compacto(bola.getRapidez())).append(',')
-          .append(bola.estaDeslizando() ? 1 : 0);
+          .append(bola.estaDeslizando() ? 1 : 0).append(',')
+          .append(bola.estaNoAr() ? 1 : 0);
         enfileirar(DESTINO_BOLA, sb.toString());
 
         for (Robot r : mundo.getRobos()) {
@@ -215,7 +218,7 @@ public final class LoggerArquivo implements Logger {
               .append(Formato.compacto(c.velNormal())).append(',')
               .append(Formato.compacto(c.velAngular())).append(',')
               .append(Formato.compacto(c.velChute())).append(',')
-              .append(Formato.compacto(c.velChip())).append(',')
+              .append(Formato.compacto(c.anguloChute())).append(',')
               .append(c.dribbler() ? 1 : 0).append(',')
               .append(r.temBolaNoDribbler() ? 1 : 0);
             enfileirar(DESTINO_ROBOS, rb.toString());

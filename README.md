@@ -13,8 +13,9 @@ publica na rede pelo protocolo oficial da liga.
 java -cp "out/production/SSL:lib/*" Main             # janela + publica visão na rede
 java -cp "out/production/SSL:lib/*" Main --sem-rede  # janela, offline
 
-# dataset sem janela, ≈650× tempo real (precisa de alguém pilotando os robôs)
-java -cp "out/production/SSL:lib/*" Main --headless --duracao 300 --saida logs/corrida1
+# dataset sem janela, ≈650× tempo real
+java -cp "out/production/SSL:lib/*" Main --headless --cenario chute-no-gol \
+     --duracao 300 --saida logs/corrida1
 
 java -cp "out/production/SSL:lib/*" Main --ajuda            # todas as opções
 java -cp "out/production/SSL:lib/*" teste.Autoteste         # invariantes da física
@@ -39,6 +40,14 @@ reclamar de `package com.google.protobuf does not exist` depois de um `git pull`
 Tudo em **milímetros**, **radianos** e **segundos**, que são as unidades da SSL-Vision, para
 que o log saia diretamente comparável a dados reais. Origem `(0,0)` no centro do campo, `+x`
 para o gol amarelo, `+y` para a lateral superior. Campo padrão: **Divisão B** (9000 × 6000 mm).
+
+Todas as dimensões vêm do regulamento: campo 9000 × 6000, gol 1000 × 180, área de defesa
+1000 × 2000, círculo central de raio 500, linha de 10, faixa externa de 300, robô de 180 mm de
+diâmetro e 150 de altura, bola de 43 mm.
+
+A bola é desenhada no tamanho real, sem piso de visibilidade. No zoom que enquadra o campo
+inteiro isso dá 4,7 px de diâmetro, o que é pequeno mas fiel: ela é 0,5% do comprimento do
+campo.
 
 ## Arquitetura
 
@@ -129,27 +138,95 @@ velocidade global e velocidade de roda ainda não.
   atrito cinético (≈ 2,9 m/s²) até que a rotação alcance a translação, o que para uma esfera
   homogênea acontece em `v = 5/7·v₀`; a partir daí rola com atrito uma ordem de grandeza
   menor (≈ 0,49 m/s²). Sem as duas fases o chute longo fica visivelmente errado.
+* **Chip com trajetória balística.** O chute carrega uma elevação (`anguloChute`), que
+  reparte a velocidade entre plano e vertical. No ar não há atrito de rolamento, porque
+  atrito de rolamento só existe em contato com o gramado; um chip que perdesse atrito
+  enquanto voa cairia bem antes do alcance real. O instante do toque no chão é resolvido
+  **dentro** do passo e não arredondado para a borda do quadro: a 60 Hz um chip percorre até
+  77 mm de altura por quadro, e grudar o quique no fim do passo faria o alcance depender da
+  taxa de simulação.
 * **Robôs omnidirecionais** com saturação de velocidade e de aceleração, linear e angular.
 * **Colisões** bola↔robô (capa circular truncada pela face plana do dribbler, resolvida no
-  referencial local e por velocidade *relativa*), robô↔robô com impulso, e paredes.
+  referencial local e por velocidade *relativa*), robô↔robô com impulso, e paredes. Bola acima
+  dos 150 mm de teto do robô passa por cima, e o dribbler não alcança bola no ar.
 * **Atuadores**: dribbler segura a bola contra a face; chutador plano e chip.
 
 Os parâmetros ficam em `ParametrosFisica` e são gravados no cabeçalho do log, então uma
-corrida sempre pode ser reproduzida com a física que a gerou. Dá para ajustá-los ao vivo pelo
-painel lateral; a troca entra no log como evento `PARAMETROS_ALTERADOS`, então um log que
-atravessa o ajuste continua interpretável.
+corrida sempre pode ser reproduzida com a física que a gerou. A troca entra no log como evento
+`PARAMETROS_ALTERADOS`, então um log que atravessa o ajuste continua interpretável.
+
+### Ajuste com prévia
+
+Um slider marcado "restituição 0,50" não diz nada a ninguém. Por isso a janela de física
+(botão *Configurar...* no painel lateral) traz, para cada parâmetro, um **ensaio que o isola**,
+animado: fantasma cinza para o que está valendo no mundo, laranja para o que o slider propõe,
+e o número que resume o efeito embaixo.
+
+| parâmetro | ensaio | medida |
+|---|---|---|
+| atrito de rolamento | bola solta a 3 m/s | quanto rola |
+| atrito de deslizamento | chute a 6 m/s | distância até virar rolamento |
+| quique na parede | bola a 4 m/s na parede | velocidade de volta |
+| quique no robô | bola a 4 m/s na casca | velocidade de volta |
+| quique entre robôs | choque frontal a 1,5 m/s | velocidade de separação |
+| restituição vertical | bola largada de 1 m | altura do primeiro quique |
+| atrito do quique | chip a 5 m/s e 45° | alcance total |
+
+Os dois traçados dividem a mesma faixa e o mesmo relógio, em vez de ficarem lado a lado:
+assim dá para ver uma bola ultrapassar a outra, que é a comparação que interessa. O
+enquadramento se ajusta aos dois, porque um limite fixo faria o traçado mais curto virar um
+ponto quando o parâmetro está no extremo oposto.
+
+Refazer um ensaio custa **0,08 ms**, então eles são recalculados a cada movimento do slider.
+Cada um é uma simulação de um ou dois corpos por alguns segundos, rodando com passo de 1/240 s
+para a medida ficar precisa.
+
+Os ensaios são projetados para *discriminar*. Dois deles não discriminavam na primeira versão
+e precisaram de conserto: o de deslizamento não terminava dentro do tempo de ensaio nos
+valores baixos, e o de robô contra robô media o mesmo número para qualquer restituição porque
+os dois **freavam antes de encostar**.
+
+### Quique e giro
+
+Um quique inverte a translação da bola mas **não o giro**: ela sai do contato girando ao
+contrário do próprio movimento, e o atrito precisa parar e reverter esse giro antes de ela
+voltar a rolar. Para uma esfera homogênea que chegava rolando, o deslize termina em
+`v₀·(5e−2)/7`.
+
+Com a restituição padrão de 0,5 isso deixa **7%** da velocidade de chegada, contra os 50% que
+sobrariam ignorando o giro. A primeira versão ignorava, e era o que fazia a bola parecer
+quicar demais. Chute de 6,5 m/s direto na parede:
+
+| | volta da parede | assenta em |
+|---|---:|---:|
+| ignorando o giro | 4,17 m | 6,0 s |
+| com o giro | **1,22 m** | **3,6 s** |
+
+Esse termo tem uma sensibilidade que não aparece no número: perto de `e = 0,4` ele tende a
+zero, então pequenos ajustes mudam muito o quanto a bola volta. De `0,50` para `0,59` a
+velocidade de saída sobe 18%, mas a distância percorrida na volta sobe 58%. O padrão é
+`restituicaoParede = 0.59`.
+
+O mesmo vale para o contato com o robô. Duas simplificações: abaixo de `e = 0,4` a conta dá
+negativo, ou seja o giro venceria e a bola voltaria em direção à parede, mas aqui ela apenas
+para; e num quique de raspão, onde só uma componente inverte, a fórmula é aproximação.
 
 Sobre os padrões de restituição: um robô de SSL é construído para **matar** a bola no
-contato, não para devolvê-la, daí `restituicaoRobo = 0.35`. E a parede perde bem mais que
-20%; com restituição alta a bola fica ricocheteando por dezenas de segundos, o que não
-acontece numa partida real. Efeito medido de `0.80/0.60` para `0.50/0.35`:
+contato, não para devolvê-la, daí `restituicaoRobo = 0.35`.
 
-| | antes | agora |
-|---|---:|---:|
-| chute máximo até assentar | 7,9 s (3 batidas) | 5,6 s (2 batidas) |
-| rebote de frente num robô parado (chegando a 4 m/s) | 2,16 m/s | 1,26 m/s |
+O chute máximo em si continua nos **6,5 m/s da regra** e cruza os 9 m do campo em 1,90 s. No
+chip, a saturação é sobre a velocidade **total** de saída, incluindo a componente vertical,
+porque o limite da regra é sobre o quanto a bola sai do chutador e não sobre a projeção no
+gramado.
 
-O chute máximo em si continua nos **6,5 m/s da regra** e cruza os 9 m do campo em 1,90 s.
+`Bola.getZ()` é a altura do ponto **mais baixo** da bola, e não a do centro. Com essa
+convenção "está no chão" é `z == 0` e "passa por cima de um robô" é `z >= Robot.ALTURA`, sem
+somar ou subtrair raio em cada teste. Na rede vai a altura do centro (`z + RAIO`), para ser
+coerente com `x` e `y`, que também são do centro.
+
+Uma simplificação conhecida: a parede é tratada como infinitamente alta, então um chip nunca
+sai do campo. Enquanto não houver árbitro para repor a bola, deixá-la escapar significaria
+perdê-la para sempre.
 
 ## Quem move os robôs
 
@@ -166,7 +243,42 @@ dentro do próprio campo: sem isso, 11 robôs na Divisão A jogariam o último a
 linha de fundo e para dentro do campo adversário.
 
 Consequência para o gerador de dataset: `--headless` grava um log de 12 robôs parados a menos
-que algo esteja pilotando.
+que algo esteja pilotando. Para isso existem os cenários de teste.
+
+## Cenários de teste
+
+Roteiros fixos que fazem o papel de um software de time conectado, para exercitar chutador,
+chip e dribbler sem precisar de um. Escolhidos por `--cenario` ou pelo painel lateral.
+
+| nome | o que faz |
+|---|---|
+| `chute-no-gol` | conduz a bola com o dribbler e chuta rasteiro no máximo da regra |
+| `passe-com-chip` | chip por cima de um adversário, recebido por um companheiro |
+| `conducao-com-roller` | frente, freada seca, ré, laterais e giro, tudo com a bola presa |
+
+São **malha aberta**: nada olha para o estado do mundo para decidir o próximo passo, só uma
+linha do tempo de ações. Isso mantém a corrida determinística (roda igual toda vez, o que
+importa para gerar dataset) e evita devolver navegação ao simulador, que é do software que
+joga. Os comandos saem pelo `ControladorExterno`, o mesmo ponto por onde entram os da rede,
+então continua valendo que existe um único caminho pelo qual um robô se move.
+
+A sequência da condução é escolhida para exercitar o roller, não para ficar bonita. Andar para
+frente ou em círculo não prova nada: a casca do robô empurra a bola e ela acompanha por inércia
+mesmo sem dribbler. O que separa "segurando" de "empurrando" é a freada seca e a marcha à ré.
+Medido, com a mesma manobra:
+
+| | após avançar | após a ré |
+|---|---:|---:|
+| roller ligado | 22 mm da boca | 22 mm |
+| roller desligado | 22 mm da boca | 1660 mm |
+
+Cada passo do roteiro vira um evento `CENARIO` no log. Sem isso, quem analisa o dataset teria
+de adivinhar em que fase cada quadro caiu.
+
+Todo cenário começa **recolhendo os robôs que não participam** para a própria linha de fundo.
+A formação inicial é uma cruz com quatro robôs sobre o eixo X, exatamente por onde os cenários
+mandam a bola: sem recolher, o chute bate num companheiro a 600 mm e volta. Dá para desligar
+esse recolhimento na caixa ao lado do seletor, justamente para ver a interferência.
 
 ## Log
 
@@ -175,7 +287,7 @@ que algo esteja pilotando.
 | Arquivo | Conteúdo |
 |---|---|
 | `meta.json` | geometria, parâmetros de física, equipes e `dt`, o suficiente para reproduzir a corrida |
-| `ball.csv` | uma linha por quadro |
+| `ball.csv` | uma linha por quadro, com `z`, `vz` e `no_ar` |
 | `robots.csv` | uma linha por robô por quadro (formato longo) |
 | `events.jsonl` | um evento por linha |
 
@@ -187,7 +299,7 @@ A amostra do quadro é gravada **antes** da integração, de propósito: a linha
 `t` contém o estado em `t` junto do comando que será aplicado no intervalo `[t, t+dt)`. É o
 par (estado, ação) alinhado.
 
-Eventos registrados: `PARTIDA_INICIADA`, `PARAMETROS_ALTERADOS`, `BOLA_REPOSICIONADA`,
+Eventos registrados: `PARTIDA_INICIADA`, `PARAMETROS_ALTERADOS`, `CENARIO`, `BOLA_REPOSICIONADA`,
 `CHUTE`, `CHIP`, `POSSE_GANHA`, `POSSE_PERDIDA`, `COLISAO_BOLA_ROBO`, `COLISAO_ROBO_ROBO`,
 `BOLA_PAREDE`.
 
@@ -228,9 +340,12 @@ um evento `PARTIDA_INICIADA`, e o `meta.json` descreve a composição inicial da
 ## Interface
 
 Zoom no scroll, arrasto com o botão direito. Ferramentas: posicionar a bola, chutar
-arrastando e inspecionar robô. O painel de log liga e desliga a gravação a quente, escolhe os
-streams e mostra o volume gravado em tempo real. O painel de física tem sliders para quique e
-atrito, aplicados na hora. O painel de rede mostra os contadores de pacote e abre a janela de
+arrastando (rasteiro ou chip a 45°) e inspecionar robô. O painel de cenário escolhe um dos
+roteiros de teste e mostra o progresso do ciclo. Com a bola no ar, a janela desenha a
+sombra no gramado e a bola sobe e cresce, ligadas por uma haste. Num campo visto de cima não
+há profundidade para mostrar altura, e crescer junto com o deslocamento é o que distingue
+"bola alta" de "bola deslocada"; a haste ancora visualmente onde ela vai cair. O painel de log liga e desliga a gravação a quente, escolhe os
+streams e mostra o volume gravado em tempo real. O painel de física abre a janela de ajuste com prévia. O painel de rede mostra os contadores de pacote e abre a janela de
 configuração de portas.
 
 Ao mirar um chute, o vetor mostra a velocidade resultante em m/s e fica vermelho ao saturar
@@ -240,6 +355,6 @@ campo inteiro para chegar no máximo, o que deixa espaço para um passe fraco.
 
 ## Ainda não existe
 
-Árbitro e estado de jogo (gol, bola fora, `HALT`/`STOP`/`RUNNING`, placar), altura de bola
-para o chip, e replay a partir do log. O software que joga é projeto separado; este
+Árbitro e estado de jogo (gol, bola fora, `HALT`/`STOP`/`RUNNING`, placar) e replay a partir
+do log. O software que joga é projeto separado; este
 repositório é só o simulador.

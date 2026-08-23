@@ -48,6 +48,11 @@ public final class Autoteste {
         chipBaixoAindaColide();
         chipAssentaDepoisDeQuicar();
         dribblerNaoPegaBolaNoAr();
+        bolaNaoSaiPeloFundoDoGol();
+        bolaBateNoPosteEmVezDeEntrar();
+        quiqueNoGolIndependeDeDt();
+        chipPassaPorCimaDoGol();
+        roboParaNoFundoDoGol();
         cenarioChuteChegaAoGol();
         cenarioChipPassaPorCimaEEhRecebido();
         cenarioConducaoMantemAPosse();
@@ -252,6 +257,115 @@ public final class Autoteste {
         long passos = Math.round(segundos / sim.getClock().getDt());
         for (long i = 0; i < passos; i++) sim.tick();
         return sim;
+    }
+
+
+    // -------------------------------------------------------------------- gol
+
+    /**
+     * O caso que justifica a varredura: um chute maximo entra e FICA no gol.
+     *
+     * <p>A 60 Hz a bola percorre 108 mm por quadro e a parede do fundo tem 20 mm.
+     * Resolvendo o contato pela posicao de chegada, como se faz com o robo, a
+     * bola apareceria dentro do gol num quadro e atras dele no seguinte, sem
+     * nunca ter tocado na parede.
+     */
+    private static void bolaNaoSaiPeloFundoDoGol() {
+        Simulacao sim = Simulacao.padrao();
+        sim.inicializarPartida("A", 0, "B", 0);
+        Geometria g = sim.getMundo().getGeometria();
+        Bola bola = sim.getMundo().getBola();
+        bola.reposicionar(Vec2.ZERO, 0, new Vec2(Bola.VEL_MAX, 0), 0);
+
+        double limite = g.meioComprimento() + g.golProfundidade() - Bola.RAIO;
+        double xMaximo = 0;
+        for (int i = 0; i < 60 * 10; i++) {
+            sim.getMundo().passo(1.0 / 60.0);
+            xMaximo = Math.max(xMaximo, bola.getPosicao().x());
+        }
+
+        verdadeiro("gol: o chute maximo entra pela boca",
+                xMaximo > g.meioComprimento());
+        verdadeiro("gol: e nao atravessa o fundo em nenhum quadro",
+                xMaximo <= limite + 0.1);
+    }
+
+    /** Bola alinhada com o poste bate na frente dele e volta, em vez de entrar. */
+    private static void bolaBateNoPosteEmVezDeEntrar() {
+        Simulacao sim = Simulacao.padrao();
+        sim.inicializarPartida("A", 0, "B", 0);
+        Geometria g = sim.getMundo().getGeometria();
+        Bola bola = sim.getMundo().getBola();
+
+        // 10 mm para fora da boca: a bola nao cabe entre o poste e essa linha.
+        bola.reposicionar(new Vec2(0, g.golLargura() / 2 + 10), 0, new Vec2(6000, 0), 0);
+
+        double xMaximo = 0;
+        for (int i = 0; i < 60 * 6; i++) {
+            sim.getMundo().passo(1.0 / 60.0);
+            xMaximo = Math.max(xMaximo, bola.getPosicao().x());
+        }
+        verdadeiro("gol: bola alinhada ao poste nao passa da linha de fundo",
+                xMaximo <= g.meioComprimento() - Bola.RAIO + 0.1);
+    }
+
+    /**
+     * A mesma condicao de dt que vale para o resto da fisica, agora no gol.
+     *
+     * <p>Sem corrigir a velocidade para o instante do toque a bola volta 444 mm a
+     * 60 Hz e 385 mm a 2000 Hz -- 15% de diferenca vinda so do tamanho do passo.
+     */
+    private static void quiqueNoGolIndependeDeDt() {
+        double a = quiqueNoFundoDoGol(1.0 / 60.0);
+        double b = quiqueNoFundoDoGol(1.0 / 600.0);
+        aproximado("gol: quique no fundo igual a 60 Hz e a 600 Hz", a, b, Math.abs(b) * 0.01);
+    }
+
+    /** Onde a bola para depois de entrar no gol e voltar do fundo. */
+    private static double quiqueNoFundoDoGol(double dt) {
+        Simulacao sim = Simulacao.padrao();
+        sim.inicializarPartida("A", 0, "B", 0);
+        Bola bola = sim.getMundo().getBola();
+        bola.reposicionar(new Vec2(2000, 0), 0, new Vec2(6000, 0), 0);
+        for (int i = 0; i < (int) (8.0 / dt); i++) sim.getMundo().passo(dt);
+        return bola.getPosicao().x();
+    }
+
+    /** A parede do gol tem 155 mm; acima disso a bola passa, como passa sobre o robo. */
+    private static void chipPassaPorCimaDoGol() {
+        Simulacao sim = Simulacao.padrao();
+        sim.inicializarPartida("A", 0, "B", 0);
+        Geometria g = sim.getMundo().getGeometria();
+        Bola bola = sim.getMundo().getBola();
+        bola.reposicionar(new Vec2(2000, 0), 0,
+                new Vec2(velocidadeHorizontal(6500, 40), 0), velocidadeVertical(6500, 40));
+
+        double xMaximo = 0;
+        for (int i = 0; i < 60 * 10; i++) {
+            sim.getMundo().passo(1.0 / 60.0);
+            xMaximo = Math.max(xMaximo, bola.getPosicao().x());
+        }
+        // Passar das costas do gol so e possivel por cima da estrutura inteira.
+        double costas = g.meioComprimento() + g.golProfundidade() + g.golEspessuraParede();
+        verdadeiro("gol: o chip sobrevoa a estrutura em vez de bater no fundo",
+                xMaximo > costas + Bola.RAIO);
+    }
+
+    /** O robo entra no gol, mas para na face interna do fundo. */
+    private static void roboParaNoFundoDoGol() {
+        Simulacao sim = Simulacao.padrao();
+        sim.inicializarPartida("A", 1, "B", 0);
+        Geometria g = sim.getMundo().getGeometria();
+        Robot r = sim.getMundo().getAzul().getRobo(0);
+        r.setPosicao(new Vec2(4200, 0));
+        r.setTheta(0);
+        r.setComando(new RobotCommand(Robot.VEL_MAX_PADRAO, 0, 0, 0, 0, false));
+
+        for (int i = 0; i < 60 * 5; i++) sim.getMundo().passo(1.0 / 60.0);
+
+        aproximado("gol: o robo para na face interna do fundo",
+                r.getPosicao().x(),
+                g.meioComprimento() + g.golProfundidade() - Robot.RAIO, 0.1);
     }
 
     private static void cenarioChuteChegaAoGol() {

@@ -90,11 +90,20 @@ public final class Ensaios {
 
     // ---------------------------------------------------------------- quiques
 
+    /**
+     * Quique na parede de fundo, fora do gol.
+     *
+     * <p>A faixa corre em {@code y = 1200} e nao no meio do campo porque o gol
+     * agora tem paredes: no eixo central a bola entraria pela boca e quicaria no
+     * fundo do gol, 120 mm antes da parede que o ensaio diz estar medindo.
+     */
     private static Ensaio restituicaoParede() {
         double xParede = Geometria.divisaoB().limiteParedeX() - Bola.RAIO;
+        double yFora = 1200; // fora da boca do gol, que vai ate 520 mm
         return new Ensaio("Quique na parede",
                 "bola a 4 m/s na parede: quanto ela volta",
-                "m", Vista.PLANO, new double[]{2000, xParede + 200, -700, 700}, xParede, true,
+                "m", Vista.PLANO,
+                new double[]{2000, xParede + 200, yFora - 700, yFora + 700}, xParede, true,
                 0.0, 1.0, "%.2f",
                 ParametrosFisica::restituicaoParede,
                 (base, v) -> new ParametrosFisica(base.gravidade(), base.atritoDeslizamento(),
@@ -104,7 +113,7 @@ public final class Ensaios {
                         base.forcaDribbler(), base.restituicaoQuique(), base.atritoQuique()),
                 p -> {
                     Mundo m = mundo(p, 0, 0);
-                    m.getBola().reposicionar(new Vec2(2200, 0));
+                    m.getBola().reposicionar(new Vec2(2200, yFora));
                     m.getBola().lancar(new Vec2(4000, 0));
                     // Medir a velocidade no instante do quique esconderia o efeito
                     // do giro, que so aparece no deslize seguinte. O que se percebe

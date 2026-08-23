@@ -114,6 +114,9 @@ public final class AutotesteRede {
                 aproximado("geometria: comprimento", geo.getFieldLength(), 9000, 1);
                 aproximado("geometria: circulo central", geo.getCenterCircleRadius(), 500, 1);
                 aproximado("geometria: raio do robo", geo.getMaxRobotRadius(), 90, 0.1);
+                // A altura do gol tem campo no protocolo e antes saia zerada; a
+                // espessura da parede nao tem campo nenhum e nao sai daqui.
+                aproximado("geometria: altura do gol", geo.getGoalHeight(), 155, 0.1);
             }
 
             // ---------- 2. SimulatorCommand move o mundo? ----------

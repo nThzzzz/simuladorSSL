@@ -1,9 +1,11 @@
 package engine;
 
+import core.Caixa;
 import core.Vec2;
 import model.Bola;
 import model.ParametrosFisica;
 import model.Geometria;
+import model.ParedeDoGol;
 import model.Robot;
 import model.RobotCommand;
 
@@ -20,6 +22,9 @@ import java.util.List;
  *       uma bola parada em vez de empurra-la.
  *   <li>A face plana do dribbler so e tratada como plano dentro da largura real
  *       da boca; fora dela o contato volta a ser com a capa circular.
+ *   <li>O gol deixou de ser enfeite. Antes a bola atravessava o gol inteiro e ia
+ *       quicar na parede da faixa externa, 300 mm atras da linha de fundo; agora
+ *       ha tres paredes de verdade por gol, e a bola que entra fica la dentro.
  * </ul>
  *
  * <p>Aproximacao conhecida: os cantos da boca do robo sao tratados como quina
@@ -39,9 +44,11 @@ public final class Colisoes {
 
     public void resolver(Mundo mundo) {
         roboParede(mundo);
+        roboGol(mundo);
         roboRobo(mundo);
         atuadores(mundo);
         bolaRobo(mundo);
+        bolaGol(mundo);
         bolaParede(mundo);
     }
 
@@ -65,6 +72,33 @@ public final class Colisoes {
 
             r.setPosicao(new Vec2(x, y));
             r.setVelocidade(new Vec2(vx, vy));
+        }
+    }
+
+
+    /**
+     * Robos contra as paredes do gol.
+     *
+     * <p>Resolucao estatica, sem varredura, e isso e seguro aqui: a 3 m/s um robo
+     * anda 50 mm por quadro, e a barreira efetiva do fundo do gol e a espessura
+     * da parede mais dois raios de robo, 200 mm. Nao ha passo que a atravesse,
+     * entao basta desfazer a sobreposicao. A bola precisa de mais cuidado.
+     *
+     * <p>Como na parede externa, o contato nao devolve o robo: ele so para. Um
+     * robo de SSL encosta na parede e fica encostado, nao ricocheteia.
+     */
+    private void roboGol(Mundo mundo) {
+        for (ParedeDoGol parede : mundo.getParedesDosGols()) {
+            for (Robot r : mundo.getRobos()) {
+                Contato c = contatoEstatico(r.getPosicao(), Robot.RAIO, parede.caixa());
+                if (c == null) continue;
+
+                r.setPosicao(c.posicao());
+                double velNormal = r.getVelocidade().escalar(c.normal());
+                if (velNormal < 0) {
+                    r.setVelocidade(r.getVelocidade().menos(c.normal().escala(velNormal)));
+                }
+            }
         }
     }
 
@@ -278,12 +312,204 @@ public final class Colisoes {
         return Math.max(0, velAntes * (5 * restituicao - 2) / 7.0);
     }
 
+
+    /**
+     * Quique nas paredes do gol.
+     *
+     * <p>O gol e o unico obstaculo do campo fino o bastante para a bola pular por
+     * cima dele em um passo: a parede tem 20 mm, a bola tem 43 mm de diametro e a
+     * 60 Hz ela percorre ate 108 mm por quadro. Resolver por sobreposicao, como
+     * se faz com o robo e com a parede externa, deixaria um chute forte sair pelo
+     * fundo do gol -- em um quadro a bola estaria dentro, no seguinte ja atras da
+     * estrutura, sem nunca ter tocado nela. Por isso o teste e VARRIDO: o que se
+     * confronta com a parede e o segmento percorrido no passo, nao o ponto de
+     * chegada.
+     *
+     * <p>So o primeiro contato do passo e resolvido, e o resto do deslocamento e
+     * descartado -- mesma escolha de {@link #bolaParede}. Encostar em duas
+     * paredes no mesmo quadro so acontece no canto interno do gol, e ai o segundo
+     * contato aparece no quadro seguinte.
+     *
+     * <p>Acima de {@code golAltura} nao ha gol nenhum: e a mesma regra do teto do
+     * robo, e e ela que faz um chip por cima da trave continuar valendo. A parede
+     * externa e que segue infinitamente alta, entao a bola nao se perde.
+     */
+    private void bolaGol(Mundo mundo) {
+        Bola bola = mundo.getBola();
+        Geometria g = mundo.getGeometria();
+        if (bola.getZ() >= g.golAltura()) return;
+
+        Contato primeiro = null;
+        ParedeDoGol atingida = null;
+        for (ParedeDoGol parede : mundo.getParedesDosGols()) {
+            Contato c = contatoVarrido(bola.getPosicaoAnterior(), bola.getPosicao(),
+                    Bola.RAIO, parede.caixa());
+            if (c != null && (primeiro == null || c.t() < primeiro.t())) {
+                primeiro = c;
+                atingida = parede;
+            }
+        }
+        if (primeiro == null) return;
+
+        Vec2 n = primeiro.normal();
+        Vec2 vel = velocidadeNoContato(bola, primeiro.t());
+        bola.setPosicao(primeiro.posicao());
+
+        double velNormal = vel.escalar(n);
+        if (velNormal >= 0) return; // rocou de saida: separa, mas nao ha quique
+
+        double velAntes = vel.norma();
+        boolean rolava = !bola.estaDeslizando();
+        double e = p.restituicaoParede();
+
+        // Inverte so a componente normal; a tangencial atravessa intacta, como na
+        // parede externa, onde o quique em x nao mexe em vy.
+        Vec2 nova = vel.menos(n.escala(velNormal * (1 + e)));
+        bola.rebater(nova, bola.getVz(), rolamentoAposQuique(velAntes, rolava, e));
+
+        mundo.registrar(TipoEvento.BOLA_PAREDE, Evento.dados(
+                "parede", atingida.nome(),
+                "x", bola.getPosicao().x(), "y", bola.getPosicao().y(),
+                "vel", bola.getRapidez()));
+    }
+
+    /**
+     * Velocidade da bola no INSTANTE do toque, e nao no fim do passo.
+     *
+     * <p>O integrador cobrou atrito do passo inteiro, inclusive do trecho depois
+     * do ponto de contato -- trecho que a bola nunca percorreu, porque a parede a
+     * interrompeu. Devolver esse pedaco por {@code v^2 = v1^2 + 2*a*s} e o que faz
+     * o quique no gol nao depender da taxa: sem a correcao a bola volta 444 mm a
+     * 60 Hz contra 385 mm a 2000 Hz, uma diferenca de 15% que vem so do tamanho do
+     * passo. E o mesmo motivo que leva {@link FisicaBola} a resolver o toque do
+     * chip no chao dentro do passo em vez de arredondar para a borda do quadro.
+     *
+     * <p>A parede externa ainda arredonda: la o quique e resolvido pela posicao de
+     * chegada, com o erro de dt que isso carrega. Sao codigos separados de
+     * proposito -- mexer no quique da parede mudaria a fisica ja gravada nos logs
+     * antigos.
+     */
+    private Vec2 velocidadeNoContato(Bola bola, double t) {
+        Vec2 vel = bola.getVelocidade();
+        // No ar nao ha atrito horizontal para devolver.
+        if (bola.estaNoAr() || t >= 1) return vel;
+
+        double sobra = bola.getPosicao().distancia(bola.getPosicaoAnterior()) * (1 - t);
+        double desaceleracao = bola.estaDeslizando()
+                ? p.desaceleracaoDeslizamento()
+                : p.desaceleracaoRolamento();
+        return vel.comNorma(Math.sqrt(vel.normaQuad() + 2 * desaceleracao * sobra));
+    }
+
+    /**
+     * Contato de um circulo com uma caixa parada, sabendo de onde ele veio.
+     *
+     * @param posicao centro ja corrigido, encostado na face e fora dela
+     * @param normal  direcao de saida, unitaria e alinhada a um eixo quando a face
+     *                e plana
+     * @param t       fracao do passo em que o contato aconteceu; 1 quando o
+     *                circulo simplesmente terminou o passo sobreposto
+     */
+    private record Contato(Vec2 posicao, Vec2 normal, double t) {}
+
+    /**
+     * Primeiro contato do segmento {@code origem -> destino} com uma caixa.
+     *
+     * <p>Metodo dos slabs sobre a caixa dilatada pelo raio: pela soma de
+     * Minkowski, um circulo contra um retangulo vira um PONTO contra o retangulo
+     * crescido. O eixo que fecha o intervalo por ultimo e a face atingida, e dele
+     * sai a normal. O custo dessa dilatacao e a mesma quina viva ja assumida na
+     * boca do dribbler -- rocar o canto do poste resolve como se fosse a face.
+     *
+     * <p>Sem cruzamento, ainda resta o caso do circulo que terminou o passo dentro
+     * da parede sem nunca ter atravessado a fronteira: e o que acontece quando
+     * alguem o colocou ali, um dribbler empurrando a bola contra a trave. Ai vale
+     * a resolucao estatica.
+     */
+    private static Contato contatoVarrido(Vec2 origem, Vec2 destino, double raio,
+                                          Caixa caixa) {
+        Caixa dilatada = caixa.dilatada(raio);
+        Vec2 d = destino.menos(origem);
+        double tEntrada = 0, tSaida = 1;
+        Vec2 normal = null;
+
+        if (Math.abs(d.x()) < 1e-12) {
+            if (origem.x() < dilatada.xMin() || origem.x() > dilatada.xMax()) return null;
+        } else {
+            double t1 = (dilatada.xMin() - origem.x()) / d.x();
+            double t2 = (dilatada.xMax() - origem.x()) / d.x();
+            if (Math.min(t1, t2) > tEntrada) {
+                tEntrada = Math.min(t1, t2);
+                normal = new Vec2(d.x() > 0 ? -1 : 1, 0);
+            }
+            tSaida = Math.min(tSaida, Math.max(t1, t2));
+        }
+
+        if (Math.abs(d.y()) < 1e-12) {
+            if (origem.y() < dilatada.yMin() || origem.y() > dilatada.yMax()) return null;
+        } else {
+            double t1 = (dilatada.yMin() - origem.y()) / d.y();
+            double t2 = (dilatada.yMax() - origem.y()) / d.y();
+            if (Math.min(t1, t2) > tEntrada) {
+                tEntrada = Math.min(t1, t2);
+                normal = new Vec2(0, d.y() > 0 ? -1 : 1);
+            }
+            tSaida = Math.min(tSaida, Math.max(t1, t2));
+        }
+
+        if (normal == null || tEntrada > tSaida) {
+            return contatoEstatico(destino, raio, caixa);
+        }
+        Vec2 toque = origem.mais(d.escala(tEntrada));
+        return new Contato(toque.mais(normal.escala(EPS)), normal, tEntrada);
+    }
+
+    /**
+     * Contato de um circulo parado sobre uma caixa: para onde ele tem de sair.
+     *
+     * <p>Com o centro FORA da caixa a normal e a direcao do ponto mais proximo ate
+     * ele, o que arredonda os cantos corretamente. Com o centro DENTRO nao existe
+     * essa direcao, entao a saida e pela face de menor penetracao -- numa parede
+     * fina isso e sempre a face por onde ele entrou.
+     */
+    private static Contato contatoEstatico(Vec2 centro, double raio, Caixa caixa) {
+        Vec2 maisProximo = caixa.pontoMaisProximo(centro);
+        Vec2 fora = centro.menos(maisProximo);
+        double dist = fora.norma();
+
+        if (dist > 1e-9) {
+            if (dist >= raio) return null;
+            Vec2 n = fora.escala(1.0 / dist);
+            return new Contato(maisProximo.mais(n.escala(raio + EPS)), n, 1);
+        }
+
+        double ateXMin = centro.x() - caixa.xMin(), ateXMax = caixa.xMax() - centro.x();
+        double ateYMin = centro.y() - caixa.yMin(), ateYMax = caixa.yMax() - centro.y();
+        double menor = Math.min(Math.min(ateXMin, ateXMax), Math.min(ateYMin, ateYMax));
+
+        if (menor == ateXMin) {
+            return new Contato(new Vec2(caixa.xMin() - raio - EPS, centro.y()),
+                    new Vec2(-1, 0), 1);
+        }
+        if (menor == ateXMax) {
+            return new Contato(new Vec2(caixa.xMax() + raio + EPS, centro.y()),
+                    new Vec2(1, 0), 1);
+        }
+        if (menor == ateYMin) {
+            return new Contato(new Vec2(centro.x(), caixa.yMin() - raio - EPS),
+                    new Vec2(0, -1), 1);
+        }
+        return new Contato(new Vec2(centro.x(), caixa.yMax() + raio + EPS),
+                new Vec2(0, 1), 1);
+    }
+
     /**
      * Quique nas paredes.
      *
      * <p>Simplificacao conhecida: a parede e tratada como infinitamente alta,
      * entao um chip nunca sai do campo. Enquanto nao houver arbitro para repor a
-     * bola, deixa-la escapar significaria perde-la para sempre.
+     * bola, deixa-la escapar significaria perde-la para sempre. O gol, ao
+     * contrario, tem altura de verdade -- por cima dele a bola passa.
      */
     private void bolaParede(Mundo mundo) {
         Bola bola = mundo.getBola();

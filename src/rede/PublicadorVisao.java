@@ -105,6 +105,7 @@ public final class PublicadorVisao implements AutoCloseable {
                         .setFieldWidth((int) g.largura())
                         .setGoalWidth((int) g.golLargura())
                         .setGoalDepth((int) g.golProfundidade())
+                        .setGoalHeight((int) g.golAltura())
                         .setBoundaryWidth((int) g.faixaExterna())
                         .setPenaltyAreaDepth((int) g.areaDefesaProfundidade())
                         .setPenaltyAreaWidth((int) g.areaDefesaLargura())

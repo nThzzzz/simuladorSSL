@@ -41,7 +41,8 @@ Tudo em **milímetros**, **radianos** e **segundos**, que são as unidades da SS
 que o log saia diretamente comparável a dados reais. Origem `(0,0)` no centro do campo, `+x`
 para o gol amarelo, `+y` para a lateral superior. Campo padrão: **Divisão B** (9000 × 6000 mm).
 
-Todas as dimensões vêm do regulamento: campo 9000 × 6000, gol 1000 × 180, área de defesa
+Todas as dimensões vêm do regulamento: campo 9000 × 6000, gol 1000 × 180 com parede de 20 e
+155 de altura, área de defesa
 1000 × 2000, círculo central de raio 500, linha de 10, faixa externa de 300, robô de 180 mm de
 diâmetro e 150 de altura, bola de 43 mm.
 
@@ -147,8 +148,8 @@ velocidade global e velocidade de roda ainda não.
   taxa de simulação.
 * **Robôs omnidirecionais** com saturação de velocidade e de aceleração, linear e angular.
 * **Colisões** bola↔robô (capa circular truncada pela face plana do dribbler, resolvida no
-  referencial local e por velocidade *relativa*), robô↔robô com impulso, e paredes. Bola acima
-  dos 150 mm de teto do robô passa por cima, e o dribbler não alcança bola no ar.
+  referencial local e por velocidade *relativa*), robô↔robô com impulso, paredes e **gol**.
+  Bola acima dos 150 mm de teto do robô passa por cima, e o dribbler não alcança bola no ar.
 * **Atuadores**: dribbler segura a bola contra a face; chutador plano e chip.
 
 Os parâmetros ficam em `ParametrosFisica` e são gravados no cabeçalho do log, então uma
@@ -185,6 +186,50 @@ Os ensaios são projetados para *discriminar*. Dois deles não discriminavam na 
 e precisaram de conserto: o de deslizamento não terminava dentro do tempo de ensaio nos
 valores baixos, e o de robô contra robô media o mesmo número para qualquer restituição porque
 os dois **freavam antes de encostar**.
+
+### O gol tem paredes
+
+O gol era enfeite: `Geometria` guardava largura e profundidade, o desenho pintava um retângulo
+atrás da linha de fundo e a física não sabia que ele existia — a bola atravessava o gol inteiro
+e ia quicar na parede da faixa externa, 300 mm atrás. Agora são **três paredes por gol**, dois
+postes e o fundo, com os 20 mm de espessura e os 155 mm de altura do regulamento. A bola que
+entra pela boca fica lá dentro, chacoalhando; o robô entra atrás dela e para na face interna do
+fundo.
+
+`golProfundidade` é a profundidade **interna**, como no regulamento, então a pegada total do gol
+é 180 + 20 = 200 mm — cabe nos 300 da faixa externa, com 100 mm de folga até a parede física.
+
+O gol é o único obstáculo do campo fino o bastante para a bola **pular por cima dele em um
+passo**: a parede tem 20 mm, a bola tem 43 de diâmetro e a 60 Hz ela percorre até 108 mm por
+quadro. Resolver o contato pela posição de chegada, como se faz com o robô e com a parede
+externa, deixaria um chute forte sair pelo fundo — num quadro a bola estaria dentro, no seguinte
+já atrás da estrutura, sem nunca ter tocado nela. Por isso o contato com o gol é **varrido**: o
+que se confronta com a parede é o segmento que a bola percorreu no passo, não o ponto onde ela
+parou.
+
+Pelo mesmo motivo a velocidade do quique é a do **instante do toque**, e não a do fim do passo.
+O integrador cobra atrito do passo inteiro, inclusive do trecho depois do contato — trecho que a
+bola nunca percorreu. Devolver esse pedaço custa uma linha e vale isto:
+
+| | 60 Hz | 240 Hz | 2000 Hz |
+|---|---:|---:|---:|
+| sem a correção | 444 mm | 398 mm | 385 mm |
+| com a correção | **384 mm** | **384 mm** | **384 mm** |
+
+A parede externa ainda arredonda o quique para a borda do quadro, com o erro de dt que isso
+carrega (≈ 17 mm no mesmo ensaio). São códigos separados de propósito: mexer no quique da parede
+mudaria a física já gravada nos logs antigos.
+
+A altura vai na visão, em `SSL_GeometryFieldSize.goal_height`, que o protocolo tem e antes saía
+zerado. A **espessura da parede** não vai: não existe campo para ela, então quem consome a visão
+sabe onde é a boca do gol e não sabe de que grossura é o poste. É mais um caso da assimetria de
+sempre — o simulador sabe mais do que consegue contar.
+
+Os 155 mm de altura são de verdade — acima deles não há gol nenhum, e é isso que faz um chip por
+cima da trave continuar valendo. A parede externa é que segue infinitamente alta, então a bola
+nunca se perde. Duas aproximações conhecidas: os cantos dos postes são quina viva, sem o
+arredondamento da soma de Minkowski (a mesma simplificação já assumida na boca do dribbler), e
+só o primeiro contato de cada passo é resolvido.
 
 ### Quique e giro
 
@@ -226,7 +271,7 @@ coerente com `x` e `y`, que também são do centro.
 
 Uma simplificação conhecida: a parede é tratada como infinitamente alta, então um chip nunca
 sai do campo. Enquanto não houver árbitro para repor a bola, deixá-la escapar significaria
-perdê-la para sempre.
+perdê-la para sempre. O gol, ao contrário, tem altura de verdade: por cima dele a bola passa.
 
 ## Quem move os robôs
 

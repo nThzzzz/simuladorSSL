@@ -34,6 +34,7 @@ public final class FisicaBola {
     public FisicaBola(ParametrosFisica p) { this.p = p; }
 
     public void integrar(Bola bola, double dt) {
+        bola.marcarInicioDoPasso();
         if (bola.estaNoAr()) voar(bola, dt);
         else rolar(bola, dt);
     }

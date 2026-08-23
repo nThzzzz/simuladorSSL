@@ -135,6 +135,8 @@ public final class LoggerArquivo implements Logger {
         geo.put("faixa_externa", g.faixaExterna());
         geo.put("gol_largura", g.golLargura());
         geo.put("gol_profundidade", g.golProfundidade());
+        geo.put("gol_espessura_parede", g.golEspessuraParede());
+        geo.put("gol_altura", g.golAltura());
         geo.put("area_defesa_profundidade", g.areaDefesaProfundidade());
         geo.put("area_defesa_largura", g.areaDefesaLargura());
         geo.put("raio_circulo_central", g.raioCirculoCentral());

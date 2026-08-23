@@ -6,6 +6,7 @@ import model.ParametrosFisica;
 import model.Cor;
 import model.Equipe;
 import model.Geometria;
+import model.ParedeDoGol;
 import model.Robot;
 
 import java.util.ArrayList;
@@ -23,6 +24,7 @@ import java.util.Map;
 public final class Mundo {
 
     private final Geometria geometria;
+    private final List<ParedeDoGol> paredesDosGols;
     private ParametrosFisica parametros;
 
     private final Bola bola = new Bola();
@@ -40,6 +42,10 @@ public final class Mundo {
 
     public Mundo(Geometria geometria, ParametrosFisica parametros) {
         this.geometria = geometria;
+        // Geometria e imutavel, entao as seis paredes sao montadas uma vez so
+        // e nao a cada passo: em headless a fisica roda centenas de milhares
+        // de passos por corrida.
+        this.paredesDosGols = geometria.paredesDosGols();
         this.parametros = parametros;
         this.azul = new Equipe("Azul", Cor.AZUL);
         this.amarelo = new Equipe("Amarelo", Cor.AMARELO);
@@ -105,6 +111,10 @@ public final class Mundo {
     // ---------------------------------------------------------------- acessos
 
     public Geometria getGeometria()          { return geometria; }
+
+    /** As tres paredes de cada gol, ja prontas: os unicos obstaculos nao circulares. */
+    public List<ParedeDoGol> getParedesDosGols() { return paredesDosGols; }
+
     public ParametrosFisica getParametros()  { return parametros; }
 
     /**

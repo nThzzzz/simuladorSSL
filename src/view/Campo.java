@@ -1,9 +1,11 @@
 package view;
 
+import core.Caixa;
 import core.Vec2;
 import model.Bola;
 import model.Cor;
 import model.Geometria;
+import model.ParedeDoGol;
 import model.Robot;
 import visao.EstadoBola;
 import visao.EstadoMundo;
@@ -209,12 +211,31 @@ public final class Campo extends JPanel {
         g.draw(new Rectangle2D.Double(-meioX, -al / 2, ad, al));
         g.draw(new Rectangle2D.Double(meioX - ad, -al / 2, ad, al));
 
-        double gl = geo.golLargura();
-        double gp = geo.golProfundidade();
-        g.setColor(COR_AZUL);
-        g.fill(new Rectangle2D.Double(-meioX - gp, -gl / 2, gp, gl));
-        g.setColor(COR_AMARELO);
-        g.fill(new Rectangle2D.Double(meioX, -gl / 2, gp, gl));
+        desenharGol(g, geo, -1, COR_AZUL);
+        desenharGol(g, geo, 1, COR_AMARELO);
+    }
+
+    /**
+     * Um gol: a cavidade tingida e, por cima, as tres paredes em tamanho real.
+     *
+     * <p>Antes o gol era um retangulo chapado de 1000 x 180 mm, e era so isso que
+     * existia dele -- nem no desenho nem na fisica havia parede. Agora a estrutura
+     * e desenhada como e: dois postes e o fundo, com os 20 mm de espessura do
+     * regulamento. No enquadramento do campo inteiro isso da cerca de 2 px, e a
+     * espessura NAO tem piso de visibilidade, pela mesma razao que a bola nao tem:
+     * o desenho vale como referencia dimensional. Quem sustenta a legibilidade e o
+     * tingido da cavidade, que tem o tamanho da boca inteira.
+     */
+    private void desenharGol(Graphics2D g, Geometria geo, int lado, Color cor) {
+        g.setColor(new Color(cor.getRed(), cor.getGreen(), cor.getBlue(), 45));
+        g.fill(retangulo(geo.cavidadeDoGol(lado)));
+
+        g.setColor(cor);
+        for (ParedeDoGol parede : geo.paredesDoGol(lado)) g.fill(retangulo(parede.caixa()));
+    }
+
+    private static Rectangle2D.Double retangulo(Caixa c) {
+        return new Rectangle2D.Double(c.xMin(), c.yMin(), c.extensaoX(), c.extensaoY());
     }
 
     private void desenharRobo(Graphics2D g, EstadoRobo r) {

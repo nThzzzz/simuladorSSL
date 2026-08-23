@@ -15,6 +15,12 @@ import core.Vec2;
  * nao a do centro. Com essa convencao "esta no chao" e simplesmente
  * {@code z == 0}, e "passa por cima de um robo" e {@code z >= Robot.ALTURA},
  * sem somar ou subtrair raio em cada teste.
+ *
+ * <p>{@link #getPosicaoAnterior()} guarda onde a bola estava quando o passo
+ * comecou. Quem resolve colisao com obstaculo FINO precisa do trecho percorrido,
+ * nao so do ponto de chegada: a 60 Hz a bola anda ate 108 mm por quadro e a
+ * parede do gol tem 20 mm, entao testar apenas a posicao final deixaria um chute
+ * forte sair pelo fundo do gol sem nunca ter sido visto dentro dele.
  */
 public final class Bola {
 
@@ -25,6 +31,7 @@ public final class Bola {
     private static final double FRACAO_ROLAMENTO = 5.0 / 7.0;
 
     private Vec2 posicao = Vec2.ZERO;
+    private Vec2 posicaoAnterior = Vec2.ZERO;
     private Vec2 velocidade = Vec2.ZERO;
     private double z = 0;
     private double vz = 0;
@@ -35,6 +42,9 @@ public final class Bola {
     public Vec2 getPosicao()    { return posicao; }
     public Vec2 getVelocidade() { return velocidade; }
     public double getRapidez()  { return velocidade.norma(); }
+
+    /** Onde a bola estava no inicio do passo de fisica, para o teste varrido. */
+    public Vec2 getPosicaoAnterior() { return posicaoAnterior; }
 
     /** Altura do ponto mais baixo da bola acima do gramado, em mm. */
     public double getZ()  { return z; }
@@ -52,6 +62,16 @@ public final class Bola {
     public void setVelocidade(Vec2 v) { this.velocidade = v; }
     public void setZ(double z)        { this.z = Math.max(0, z); }
     public void setVz(double vz)      { this.vz = vz; }
+
+    /**
+     * Marca o inicio de um passo de fisica, guardando a posicao atual.
+     *
+     * <p>Quem chama e o integrador, antes de mover a bola. Nao e
+     * {@link #setPosicao(Vec2)} que atualiza isso de proposito: as correcoes de
+     * colisao tambem chamam {@code setPosicao}, e elas nao sao deslocamento
+     * percorrido -- sao conserto do mesmo instante.
+     */
+    public void marcarInicioDoPasso() { this.posicaoAnterior = posicao; }
 
     /** Marca a transicao de deslizamento para rolamento puro. */
     public void marcarRolando() {
@@ -121,6 +141,9 @@ public final class Bola {
     /** Teleporta a bola, possivelmente no ar e em movimento. */
     public void reposicionar(Vec2 p, double z, Vec2 velocidade, double vz) {
         this.posicao = p;
+        // Teleporte nao e trajeto: sem isto o passo seguinte varreria a linha
+        // reta entre o lugar antigo e o novo e acharia colisoes que nao houve.
+        this.posicaoAnterior = p;
         this.z = Math.max(0, z);
         marcarRolando();
         lancar(velocidade, vz);

@@ -25,9 +25,11 @@ java -cp "out/production/SSL:lib/*" teste.AutotesteRede     # protocolo de rede
 O modo headless não publica de propósito: ele roda centenas de vezes mais rápido que o tempo
 real, e despejar isso num multicast só inundaria a rede.
 
-A única dependência é `protobuf-java`, versionada em `lib/` junto com o Java gerado a partir
-dos `.proto` (em `src/proto/`). Um clone limpo compila offline, sem Gradle, sem Maven e sem
-baixar nada. Se o jar sumir, `./tools/build.sh` busca de volta sozinho. O
+As dependências são três, versionadas em `lib/` junto com o Java gerado a partir dos `.proto`
+(em `src/proto/`): `protobuf-java`, e o `flatlaf` mais sua fonte JetBrains Mono, que são o que
+faz a janela ter a mesma cara em qualquer sistema (veja [Aparência](#aparência)). As três são
+jar único, sem dependência transitiva. Um clone limpo compila offline, sem Gradle, sem Maven e
+sem baixar nada. Se algum jar sumir, `./tools/build.sh` busca de volta sozinho. O
 `./tools/gerar-proto.sh` só precisa rodar quando o protocolo da liga mudar.
 
 **IntelliJ:** o `SSL.iml` já declara `lib/` como biblioteca do módulo, apontando para o
@@ -384,7 +386,7 @@ um evento `PARTIDA_INICIADA`, e o `meta.json` descreve a composição inicial da
 
 ## Interface
 
-Zoom no scroll, arrasto com o botão direito. Ferramentas: posicionar a bola, chutar
+Zoom no scroll, arrasto move o campo. Ferramentas: posicionar a bola, chutar
 arrastando (rasteiro ou chip a 45°) e inspecionar robô. O painel de cenário escolhe um dos
 roteiros de teste e mostra o progresso do ciclo. Com a bola no ar, a janela desenha a
 sombra no gramado e a bola sobe e cresce, ligadas por uma haste. Num campo visto de cima não
@@ -393,10 +395,54 @@ há profundidade para mostrar altura, e crescer junto com o deslocamento é o qu
 streams e mostra o volume gravado em tempo real. O painel de física abre a janela de ajuste com prévia. O painel de rede mostra os contadores de pacote e abre a janela de
 configuração de portas.
 
+Arrastar com o **botão esquerdo** move o campo. Antes só o direito deslocava, e num trackpad de
+MacBook não há botão direito para segurar — clique de dois dedos não se sustenta enquanto um
+terceiro arrasta —, então o campo era, na prática, fixo para quem não usa mouse. O direito
+continua funcionando.
+Não há conflito com o chute porque a mira só começa quando o clique cai a menos de 250 mm da
+bola; fora desse raio o arrasto não tinha uso nenhum.
+
+O zoom ancora no **cursor**: o ponto do campo sob o ponteiro fica parado enquanto a escala muda.
+Antes ancorava no centro do painel, e quem olhava um canto via o canto fugir da tela a cada
+passo, tendo de arrastar de volta toda vez.
+
+Cada evento de scroll vale no máximo **um entalhe de roda**. O trackpad do mac não manda um
+evento por gesto como uma roda com entalhe: manda uma rajada — medidos 327 eventos em 4 s — em
+que o peso varia de 0,006 a 4,7. Sem teto, aquele 4,7 sozinho mudava a escala em 58% num quadro,
+no meio de centenas de eventos que não faziam nada visível. Era esse contraste, e não a
+sensibilidade média, que fazia o zoom parecer instável: quase parado e de repente um pulo.
+Cortar em um entalhe limita pela coisa certa e por isso não estraga a roda de mouse, onde o
+valor já é 1 e o corte nunca age. O `teste.Autoteste` prende as três coisas — âncora, batente e
+teto do pico.
+
 Ao mirar um chute, o vetor mostra a velocidade resultante em m/s e fica vermelho ao saturar
 nos 6,5 m/s. Sem isso não dá para dosar a força, porque o comprimento do vetor sozinho não
 diz nada depois que ele bate no teto. O ganho do arrasto é 1,0, então é preciso arrastar o
 campo inteiro para chegar no máximo, o que deixa espaço para um passe fraco.
+
+### Aparência
+
+Antes, o simulador não escolhia look-and-feel nenhum e caía no Metal, o visual de fábrica do
+Swing. A estratégia, do outro lado, pedia o do **sistema**. As duas janelas costumam ficar lado
+a lado na mesma tela e saíam com botão diferente uma da outra na mesma máquina, além de mudarem
+de cara entre macOS e Windows.
+
+Hoje `view.Estilo` instala o [FlatLaf](https://www.formdev.com/flatlaf/) nos dois, com as
+mesmas cores. Ele desenha tudo em Java, sem delegar nada ao sistema, e por isso sai igual nos
+três. O Metal também daria isso, mas não respeita cor por componente o bastante para acompanhar
+o painel escuro daqui.
+
+A fonte é um segundo eixo, independente do L&F. `new Font("SansSerif", ...)` não nomeia uma
+fonte: é um pedido que o JDK resolve para uma fonte **física** diferente em cada sistema.
+Larguras diferentes movem o texto que `Campo` desenha direto no `Graphics`, e nenhum
+look-and-feel conserta isso. A JetBrains Mono vai embarcada no jar, e todo `new Font` do código
+virou `Estilo.fonte(...)`.
+
+Ela é monoespaçada de propósito, num programa que é quase todo número medido. O custo é que
+coluna passou a ser caractere na régua, sem a folga que uma proporcional dava de graça: foi o
+que alargou o campo de nome de equipe de 9 para 12 colunas ("Adversario" tem 10 e sumia pela
+esquerda) e a coluna de perguntas do diálogo de física de 290 para 335 px. Ao mexer em largura
+fixa perto de texto, meça com `getFontMetrics` em vez de estimar no olho.
 
 ## Ainda não existe
 

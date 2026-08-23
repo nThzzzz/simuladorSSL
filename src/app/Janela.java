@@ -11,6 +11,7 @@ import model.Robot;
 import model.RobotCommand;
 import sim.ConsoleLocal;
 import view.Campo;
+import view.Estilo;
 import visao.CanalDeControle;
 import visao.EstadoRobo;
 import visao.FonteDeVisao;
@@ -36,6 +37,7 @@ import javax.swing.Timer;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
@@ -60,9 +62,9 @@ import java.time.format.DateTimeFormatter;
  */
 public final class Janela {
 
-    private static final Color FUNDO_PAINEL = new Color(32, 32, 36);
-    private static final Color TEXTO = new Color(225, 225, 230);
-    private static final Color APAGADO = new Color(150, 150, 160);
+    private static final Color FUNDO_PAINEL = Estilo.PAINEL;
+    private static final Color TEXTO = Estilo.TEXTO;
+    private static final Color APAGADO = Estilo.APAGADO;
 
     private enum Ferramenta {
         NENHUMA("Arrastar / chutar rasteiro"),
@@ -165,22 +167,34 @@ public final class Janela {
                 }
             }
 
+            /**
+             * Arrastar move o campo, a menos que o gesto tenha comecado uma mira.
+             *
+             * <p>Antes so o botao direito arrastava. No trackpad do mac nao ha
+             * botao direito para segurar -- clique de dois dedos nao se sustenta
+             * enquanto um terceiro arrasta -- e o campo era, na pratica, fixo.
+             * Nao ha conflito com o chute porque a mira so comeca com o clique a
+             * menos de 250 mm da bola; fora disso o arrasto nao fazia nada.
+             */
             @Override
             public void mouseDragged(MouseEvent e) {
+                int dx = e.getX() - ultimoX;
+                int dy = e.getY() - ultimoY;
+                ultimoX = e.getX();
+                ultimoY = e.getY();
                 campo.setMouseTela(e.getX(), e.getY());
-                if (SwingUtilities.isRightMouseButton(e)) {
-                    campo.deslocar(e.getX() - ultimoX, e.getY() - ultimoY);
-                    ultimoX = e.getX();
-                    ultimoY = e.getY();
-                    return;
-                }
+
                 if (campo.isMostrarMira()) {
                     campo.setMira(true, campo.telaParaMundo(e.getX(), e.getY()));
+                    return;
                 }
+                campo.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+                campo.deslocar(dx, dy);
             }
 
             @Override
             public void mouseReleased(MouseEvent e) {
+                campo.setCursor(Cursor.getDefaultCursor());
                 if (!campo.isMostrarMira()) return;
                 campo.setMira(false, null);
 
@@ -204,7 +218,7 @@ public final class Janela {
 
             @Override
             public void mouseWheelMoved(MouseWheelEvent e) {
-                campo.aplicarZoom(Math.pow(1.1, -e.getPreciseWheelRotation()));
+                campo.aplicarZoom(Campo.fatorDeZoom(e), e.getX(), e.getY());
             }
         };
         campo.addMouseListener(mouse);
@@ -223,10 +237,13 @@ public final class Janela {
         JPanel painel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
         painel.setBackground(FUNDO_PAINEL);
 
-        JTextField nomeAzul = new JTextField(campo.quadro().nomeAzul(), 9);
+        // 12 colunas, e nao 9: com a fonte monoespacada da Estilo, coluna e
+        // caractere na regua, sem a folga que uma proporcional dava de graca.
+        // "Adversario" tem 10 e desaparecia pela esquerda no campo de 9.
+        JTextField nomeAzul = new JTextField(campo.quadro().nomeAzul(), 12);
         JTextField qtdAzul = new JTextField(
                 String.valueOf(campo.quadro().quantidade(Cor.AZUL)), 2);
-        JTextField nomeAmarelo = new JTextField(campo.quadro().nomeAmarelo(), 9);
+        JTextField nomeAmarelo = new JTextField(campo.quadro().nomeAmarelo(), 12);
         JTextField qtdAmarelo = new JTextField(
                 String.valueOf(campo.quadro().quantidade(Cor.AMARELO)), 2);
 
@@ -286,7 +303,7 @@ public final class Janela {
         painel.add(painelRede());
 
         painel.add(Box.createVerticalStrut(20));
-        painel.add(rotulo("<html>botao direito arrasta<br>scroll aplica zoom</html>", APAGADO));
+        painel.add(rotulo("<html>arraste para mover o campo<br>scroll aplica zoom</html>", APAGADO));
         painel.add(Box.createVerticalGlue());
         return painel;
     }

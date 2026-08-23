@@ -11,6 +11,7 @@ import rede.ConfigRede;
 import sim.ControleLocal;
 import sim.Simulacao;
 import sim.VisaoLocal;
+import view.Estilo;
 import visao.FonteDeVisao;
 
 import javax.swing.SwingUtilities;
@@ -126,13 +127,16 @@ public final class Main {
         }
 
         Rede r = rede;
-        SwingUtilities.invokeLater(() -> Janela.abrir(
+        SwingUtilities.invokeLater(() -> {
+            Estilo.instalar();
+            Janela.abrir(
                 "SSL Simulator",
                 fonte,
                 new ControleLocal(sim),
                 sim,
                 () -> sim.tickTempoReal(5), // teto de 5 ticks: prefere perder tempo a travar
-                r, cenarios));
+                r, cenarios);
+        });
     }
 
     static String carimbo() {

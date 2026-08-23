@@ -52,7 +52,15 @@ public final class DialogoFisica extends JDialog {
 
     private static final int PASSOS_DO_SLIDER = 1000;
 
-    private static final int LARGURA_CONTROLES = 290;
+    /**
+     * Cabe a pergunta mais longa do ensaio sem reticencias.
+     *
+     * <p>Eram 290, medida na fonte proporcional que o L&F do sistema dava. A
+     * {@code Estilo} trocou por uma monoespacada, que e mais larga no mesmo
+     * corpo, e "altura do primeiro quique" passou a ser cortada. O numero sai de
+     * medir a maior pergunta a 11f -- 322 px -- com folga para a proxima.
+     */
+    private static final int LARGURA_CONTROLES = 335;
     private static final int LARGURA_FAIXA = 430;
     private static final int ALTURA_LINHA = 76;
 

@@ -5,6 +5,10 @@ Simulador bidimensional da categoria **Small Size League** (RoboCup), escrito em
 como o `grSim`, e hoje cumpre o mesmo papel que ele: simula a física, mostra numa janela e
 publica na rede pelo protocolo oficial da liga.
 
+> **Primeira vez aqui? Leia o [GUIA.md](GUIA.md).** Ele ensina a rodar, a ajustar a física e a
+> gerar dataset, com imagens. Este README é o outro documento: explica **por que** cada decisão
+> de projeto é o que é, e é o que se lê antes de *mudar* alguma coisa.
+
 ## Como rodar
 
 ```bash

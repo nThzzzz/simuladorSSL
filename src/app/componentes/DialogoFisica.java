@@ -1,8 +1,7 @@
-package app;
+package app.componentes;
 
 import app.fisica.Ensaio;
 import app.fisica.Ensaios;
-import app.fisica.PainelEnsaio;
 import app.fisica.Trajetoria;
 import model.ParametrosFisica;
 import visao.CanalDeControle;

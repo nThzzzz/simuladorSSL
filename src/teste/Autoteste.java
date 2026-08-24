@@ -1,5 +1,20 @@
 package teste;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import core.Angulo;
 import demo.Cenarios;
 import demo.ExecutorDeCenario;
@@ -15,7 +30,7 @@ import model.Robot;
 import model.RobotCommand;
 import model.RobotCommand;
 import sim.Simulacao;
-import view.Campo;
+import app.componentes.Campo;
 import visao.EstadoMundo;
 
 import java.awt.event.MouseEvent;
@@ -65,12 +80,144 @@ public final class Autoteste {
         colisaoRoboRoboConservaMomento();
         formacaoCabeNoCampo();
         formacaoEhCruzApontandoParaOCentro();
+        arquiteturaRespeitaODeclarado();
         zoomAncoraNoCursor();
         zoomNoBatenteNaoDesliza();
         zoomIgnoraPicoDoTrackpad();
 
         System.out.printf("%n%d/%d verificacoes passaram%n", total - falhas, total);
         if (falhas > 0) System.exit(1);
+    }
+
+    // -------------------------------------------------------- arquitetura
+
+    /**
+     * As zonas e as dependencias declaradas nos {@code package-info.java} valem.
+     *
+     * <p>O README sempre descreveu a arquitetura em prosa, e prosa nao segura
+     * nada: o grafo REAL tinha dois ciclos que ninguem via -- {@code estrategia}
+     * com {@code estrategia.esqueleto}, e depois {@code app.telas} com
+     * {@code app.componentes} -- e o {@code view} dependia de tres pacotes que a
+     * prosa nao citava. Cada pacote agora DECLARA sua zona e de quem depende, e
+     * este caso le a declaracao e o codigo e falha quando os dois divergem.
+     *
+     * <p>A regra que mais importa e a de zona: {@code ESTAVEL} nao pode depender
+     * de {@code TRABALHO} nem de {@code EXTENSAO}. E o que garante que mexer numa
+     * play nunca obrigue a mexer na rede -- e o que deixa rodar mil partidas de
+     * treino sem abrir janela nem tocar em socket.
+     */
+    private static void arquiteturaRespeitaODeclarado() {
+        Path src = Path.of("src");
+        if (!Files.isDirectory(src)) {
+            verdadeiro("arquitetura: src/ encontrado (rode a partir da raiz do repo)", false);
+            return;
+        }
+
+        Map<String, String> zona = new TreeMap<>();
+        Map<String, Set<String>> declarado = new TreeMap<>();
+        Map<String, Set<String>> real = new TreeMap<>();
+        List<String> semInfo = new ArrayList<>();
+
+        try (var caminhos = Files.walk(src)) {
+            for (Path p : caminhos.filter(x -> x.toString().endsWith(".java")).toList()) {
+                if (p.toString().contains("/proto/")) continue;
+                String txt = Files.readString(p);
+                Matcher mp = Pattern.compile("^package\\s+([\\w.]+);", Pattern.MULTILINE).matcher(txt);
+                if (!mp.find()) continue;              // Main.java, no pacote padrao
+                String pkg = mp.group(1);
+
+                if (p.getFileName().toString().equals("package-info.java")) {
+                    // A lista termina no ultimo ponto da LINHA: nome de pacote tem
+                    // ponto no meio, e cortar no primeiro dava "estrategia" onde
+                    // estava escrito "estrategia.coaches".
+                    Matcher md = Pattern.compile(
+                            "Zona:\\s*(\\w+)\\.\\s*Depende de:\\s*(.*)\\.\\s*$", Pattern.MULTILINE)
+                            .matcher(txt);
+                    if (!md.find()) { semInfo.add(pkg + " (formato)"); continue; }
+                    zona.put(pkg, md.group(1));
+                    Set<String> deps = new TreeSet<>();
+                    for (String d : md.group(2).split(",")) {
+                        d = d.trim();
+                        if (!d.isEmpty() && !d.equals("(nada)")) deps.add(d);
+                    }
+                    declarado.put(pkg, deps);
+                    continue;
+                }
+
+                real.putIfAbsent(pkg, new TreeSet<>());
+                Matcher mi = Pattern.compile("^import\\s+(?:static\\s+)?([\\w.]+);", Pattern.MULTILINE)
+                        .matcher(txt);
+                while (mi.find()) {
+                    String imp = mi.group(1);
+                    if (imp.startsWith("java.") || imp.startsWith("javax.")
+                            || imp.startsWith("com.formdev.")) continue;
+                    String alvo = imp.substring(0, imp.lastIndexOf('.'));
+                    if (alvo.startsWith("proto")) alvo = "proto";
+                    if (!alvo.equals(pkg)) real.get(pkg).add(alvo);
+                }
+            }
+        } catch (Exception e) {
+            verdadeiro("arquitetura: leitura de src/ (" + e.getMessage() + ")", false);
+            return;
+        }
+
+        for (String pkg : real.keySet()) if (!zona.containsKey(pkg)) semInfo.add(pkg);
+        verdadeiro("arquitetura: todo pacote declara zona e dependencias"
+                + (semInfo.isEmpty() ? "" : " -- faltam: " + semInfo), semInfo.isEmpty());
+
+        List<String> naoDeclaradas = new ArrayList<>();
+        for (var e : real.entrySet()) {
+            Set<String> ok = declarado.getOrDefault(e.getKey(), Set.of());
+            if (ok.contains("*")) continue;                       // teste, por natureza
+            for (String alvo : e.getValue()) {
+                if (alvo.equals("proto") || ok.contains(alvo)) continue;
+                naoDeclaradas.add(e.getKey() + " -> " + alvo);
+            }
+        }
+        verdadeiro("arquitetura: nenhum import fora do que o pacote declara"
+                + (naoDeclaradas.isEmpty() ? "" : " -- " + naoDeclaradas), naoDeclaradas.isEmpty());
+
+        List<String> furos = new ArrayList<>();
+        for (var e : declarado.entrySet()) {
+            if (!"ESTAVEL".equals(zona.get(e.getKey()))) continue;
+            for (String alvo : e.getValue()) {
+                String za = zona.get(alvo);
+                if (za != null && !za.equals("ESTAVEL")) furos.add(e.getKey() + " -> " + alvo + " (" + za + ")");
+            }
+        }
+        verdadeiro("arquitetura: ESTAVEL nao depende de TRABALHO nem de EXTENSAO"
+                + (furos.isEmpty() ? "" : " -- " + furos), furos.isEmpty());
+
+        String ciclo = acharCiclo(declarado);
+        verdadeiro("arquitetura: nenhuma dependencia circular"
+                + (ciclo == null ? "" : " -- " + ciclo), ciclo == null);
+    }
+
+    /** Busca em profundidade; devolve o caminho do primeiro ciclo, ou null. */
+    private static String acharCiclo(Map<String, Set<String>> grafo) {
+        Set<String> pronto = new HashSet<>();
+        for (String inicio : grafo.keySet()) {
+            Deque<String> pilha = new ArrayDeque<>();
+            String r = visitar(inicio, grafo, new LinkedHashSet<>(), pronto, pilha);
+            if (r != null) return r;
+        }
+        return null;
+    }
+
+    private static String visitar(String no, Map<String, Set<String>> grafo,
+                                  LinkedHashSet<String> caminho, Set<String> pronto,
+                                  Deque<String> pilha) {
+        if (pronto.contains(no)) return null;
+        if (!caminho.add(no)) return String.join(" -> ", caminho) + " -> " + no;
+        for (String p : grafo.getOrDefault(no, Set.of())) {
+            if (p.equals("*")) continue;
+            if (caminho.contains(p)) return String.join(" -> ", caminho) + " -> " + p;
+            String r = visitar(p, grafo, caminho, pronto, pilha);
+            if (r != null) return r;
+        }
+        caminho.remove(no);
+        pronto.add(no);
+        return null;
     }
 
     // ------------------------------------------------------- zoom do campo

@@ -1,4 +1,9 @@
-package app.fisica;
+package app.componentes;
+
+import app.fisica.Amostra;
+import app.fisica.Ensaio;
+import app.fisica.Trajetoria;
+import app.fisica.Vista;
 
 import core.Vec2;
 import model.Bola;

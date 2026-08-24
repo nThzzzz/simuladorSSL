@@ -54,19 +54,60 @@ campo.
 
 ## Arquitetura
 
-Dependências estritamente em uma direção, sem ciclos:
+Cada pacote **declara** sua zona e de quem depende, no próprio `package-info.java`:
+
+```java
+/** <p>Zona: ESTAVEL. Depende de: core, model. */
+package engine;
+```
+
+Isso não é enfeite: o `teste.Autoteste` lê essas linhas e o código, e falha quando os dois
+divergem. Antes a arquitetura vivia só nesta seção, e prosa não impede ninguém de importar o
+que não devia.
+
+### As três zonas
+
+|  | zona | o que é |
+|---|---|---|
+| **ESTAVEL** | `core` `model` `engine` `visao` `sim` `rede` `log` `view` | o simulador propriamente dito. Está pronto; quando algo quebra aqui, quase nunca foi você |
+| **TRABALHO** | `app` `app.telas` `app.componentes` `app.fisica` | a janela |
+| **EXTENSAO** | `demo` | onde se escreve roteiro de teste novo |
+
+**ESTAVEL não pode depender de TRABALHO nem de EXTENSAO** — é o que garante que a física e a
+rede não saibam que existe janela, e é por isso que o modo `--headless` roda sem abrir nenhuma.
+
+### O grafo
 
 ```
-core     →  (nada)         Vec2, Angulo, SimClock
-model    →  core           Bola, Robot, Equipe, Geometria, RobotCommand, ParametrosFisica
-visao    →  core, model    EstadoMundo, FonteDeVisao, CanalDeControle
-engine   →  core, model    Mundo, FisicaBola, FisicaRobo, Colisoes, Evento
-log      →  + engine       Logger, LoggerArquivo, Json
-sim      →  tudo           Simulacao, VisaoLocal, ControleLocal, ControladorExterno
-rede     →  + proto        PublicadorVisao, ReceptorDeControle, ReceptorDeComandosRobo
-view     →  core, model, visao    Campo
-app      →  tudo           Janela, Rede, DialogoRede
+core     →  (nada)                  Vec2, Angulo, SimClock
+view     →  (nada)                  Estilo
+model    →  core                    Bola, Robot, Equipe, Geometria, RobotCommand
+visao    →  core, model             EstadoMundo, FonteDeVisao, CanalDeControle
+engine   →  core, model             Mundo, FisicaBola, FisicaRobo, Colisoes, Evento
+log      →  engine, model           Logger, LoggerArquivo, Json
+sim      →  + core, log, visao      Simulacao, VisaoLocal, ControleLocal, ControladorExterno
+rede     →  + proto, sim, visao     PublicadorVisao, ReceptorDeControle, ReceptorDeComandosRobo
+demo     →  core, engine,           Cenarios, Roteiro, Passo, ExecutorDeCenario
+            model, sim
+app      →  model, rede,            Rede                       <- orquestrador
+            sim, visao
+  fisica →  core, engine, model     Ensaios, Ensaio, Trajetoria, Amostra, Vista
+  componentes → app, app.fisica,    Campo, DialogoFisica, DialogoRede, PainelEnsaio
+            core, model, rede, view, visao
+  telas  →  + componentes, demo,    TelaJogo
+            log
 ```
+
+### Telas e componentes
+
+`telas/` são janelas inteiras que montam um layout; `componentes/` são os pedaços que elas
+montam, e a dependência é numa direção só. `app/fisica/` fica de fora dos dois de propósito: são
+os ensaios que o diálogo plota, e isso é **conta, não desenho** — quem desenha é o
+`PainelEnsaio`, que mora em `componentes/`.
+
+Os nomes levam o tipo, como as implementações de estratégia do outro repositório:
+`DialogoFisica`, `PainelEnsaio`, `TelaJogo`. Numa pilha de exceção dá para saber que a primeira
+é modal e a segunda não.
 
 ### O snapshot
 

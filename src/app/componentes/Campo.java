@@ -1,4 +1,6 @@
-package view;
+package app.componentes;
+
+import view.Estilo;
 
 import core.Caixa;
 import core.Vec2;

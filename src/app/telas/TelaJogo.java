@@ -1,4 +1,8 @@
-package app;
+package app.telas;
+
+import app.Rede;
+import app.componentes.DialogoFisica;
+import app.componentes.DialogoRede;
 
 import core.Vec2;
 import demo.Cenarios;
@@ -10,7 +14,7 @@ import model.ParametrosFisica;
 import model.Robot;
 import model.RobotCommand;
 import sim.ConsoleLocal;
-import view.Campo;
+import app.componentes.Campo;
 import view.Estilo;
 import visao.CanalDeControle;
 import visao.EstadoRobo;
@@ -60,7 +64,7 @@ import java.time.format.DateTimeFormatter;
  * <p>Uma janela so, como no grSim: quem simula e quem mostra sao o mesmo
  * processo, e a rede e uma saida a mais, nao a fonte do que se ve.
  */
-public final class Janela {
+public final class TelaJogo {
 
     private static final Color FUNDO_PAINEL = Estilo.PAINEL;
     private static final Color TEXTO = Estilo.TEXTO;
@@ -87,7 +91,7 @@ public final class Janela {
     private Ferramenta ferramenta = Ferramenta.NENHUMA;
     private JLabel statusFerramenta;
 
-    private Janela(FonteDeVisao fonte, CanalDeControle controle, ConsoleLocal console,
+    private TelaJogo(FonteDeVisao fonte, CanalDeControle controle, ConsoleLocal console,
                    Rede rede, ExecutorDeCenario cenarios) {
         this.fonte = fonte;
         this.controle = controle;
@@ -107,7 +111,7 @@ public final class Janela {
     public static JFrame abrir(String titulo, FonteDeVisao fonte, CanalDeControle controle,
                                ConsoleLocal console, Runnable aCadaQuadro, Rede rede,
                                ExecutorDeCenario cenarios) {
-        Janela j = new Janela(fonte, controle, console, rede, cenarios);
+        TelaJogo j = new TelaJogo(fonte, controle, console, rede, cenarios);
         return j.montar(titulo, aCadaQuadro);
     }
 

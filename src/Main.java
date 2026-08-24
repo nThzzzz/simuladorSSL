@@ -1,4 +1,4 @@
-import app.Janela;
+import app.telas.TelaJogo;
 import app.Rede;
 import demo.Cenarios;
 import demo.ExecutorDeCenario;
@@ -129,7 +129,7 @@ public final class Main {
         Rede r = rede;
         SwingUtilities.invokeLater(() -> {
             Estilo.instalar();
-            Janela.abrir(
+            TelaJogo.abrir(
                 "SSL Simulator",
                 fonte,
                 new ControleLocal(sim),

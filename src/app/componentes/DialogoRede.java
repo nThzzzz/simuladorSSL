@@ -1,4 +1,6 @@
-package app;
+package app.componentes;
+
+import app.Rede;
 
 import rede.ConfigRede;
 

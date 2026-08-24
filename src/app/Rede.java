@@ -148,8 +148,13 @@ public final class Rede implements AutoCloseable {
 
     public void anunciar() {
         System.out.println("rede:");
-        System.out.printf("  visao      -> %s:%d  (SSL_WrapperPacket, multicast)%n",
-                config.grupoVisao(), config.portaVisao());
+        System.out.printf("  visao      -> %s:%d  (SSL_WrapperPacket, multicast por %s)%n",
+                config.grupoVisao(), config.portaVisao(),
+                config.interfaceDeSaida().isBlank() ? "interface automatica" : config.interfaceDeSaida());
+        for (String ip : config.destinos()) {
+            System.out.printf("  visao      -> %s:%d  (a mesma coisa, por unicast)%n",
+                    ip, config.portaVisao());
+        }
         System.out.printf("  controle   <- porta %d  (SimulatorCommand)%n", config.portaControle());
         System.out.printf("  robos azul <- porta %d  (RobotControl)%n", config.portaAzul());
         System.out.printf("  robos amar <- porta %d  (RobotControl)%n", config.portaAmarelo());
@@ -158,9 +163,20 @@ public final class Rede implements AutoCloseable {
     /** Linha curta de estado para a interface. */
     public synchronized String status() {
         if (visao == null) return "<html><i>reconfigurando...</i></html>";
-        return String.format("<html>%s:%d<br>%,d pacotes enviados<br>"
+        // O unicast so aparece quando existe. Sem isto nao havia como saber, da
+        // tela, se ele tinha pegado -- e "configurei e nao mudou nada" e
+        // exatamente o que se ve quando o destino foi digitado no lugar errado.
+        StringBuilder extra = new StringBuilder();
+        if (!config.interfaceDeSaida().isBlank()) {
+            extra.append("<br>saindo por ").append(config.interfaceDeSaida());
+        }
+        for (String ip : config.destinos()) {
+            extra.append("<br>+ unicast para ").append(ip);
+        }
+
+        return String.format("<html>%s:%d%s<br>%,d pacotes enviados<br>"
                         + "%,d comandos - %,d de robo</html>",
-                config.grupoVisao(), config.portaVisao(), visao.getPacotesEnviados(),
+                config.grupoVisao(), config.portaVisao(), extra, visao.getPacotesEnviados(),
                 controle.getComandosRecebidos(),
                 azul.getPacotesRecebidos() + amarelo.getPacotesRecebidos());
     }

@@ -175,6 +175,8 @@ public final class Main {
                     case "--porta-controle" -> rede = rede.comPortaControle(Integer.parseInt(args[++i]));
                     case "--porta-azul"     -> rede = rede.comPortaAzul(Integer.parseInt(args[++i]));
                     case "--porta-amarelo"  -> rede = rede.comPortaAmarelo(Integer.parseInt(args[++i]));
+                    case "--interface"      -> rede = rede.comInterfaceDeSaida(args[++i]);
+                    case "--enviar-para"    -> rede = rede.comDestinosUnicast(args[++i]);
                     case "--ajuda", "-h"    -> { ajuda(); System.exit(0); }
                     default -> throw new IllegalArgumentException(
                             "argumento desconhecido: " + args[i] + " (use --ajuda)");
@@ -213,6 +215,12 @@ public final class Main {
                       --porta-controle <n> porta de SimulatorCommand (padrao 10300)
                       --porta-azul <n>     RobotControl azul         (padrao 10301)
                       --porta-amarelo <n>  RobotControl amarelo      (padrao 10302)
+
+  --interface <nome>   por qual interface o multicast sai (padrao: o SO decide)
+  --enviar-para <ips>  manda a visao TAMBEM por unicast, ips separados por
+                       virgula. Use quando o software de time esta em outra
+                       maquina e o multicast nao atravessa a rede -- caso
+                       comum com uma ponta no cabo e outra no Wi-Fi
 
                       as mesmas opcoes podem ser mudadas com a janela aberta,
                       no botao "Configurar..." do painel Rede

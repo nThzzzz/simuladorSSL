@@ -101,7 +101,7 @@ public final class Rede implements AutoCloseable {
         ReceptorDeComandosRobo am = null;
         try {
             v = new PublicadorVisao(c.grupoVisao(), c.portaVisao(),
-                    c.interfaceDeSaida(), c.destinos());
+                    c.interfaceDeSaida(), c.destinos(), c.broadcastLocal());
             ct = new ReceptorDeControle(c.portaControle(), destinoDeControle);
             az = new ReceptorDeComandosRobo(c.portaAzul(), Cor.AZUL, externo);
             am = new ReceptorDeComandosRobo(c.portaAmarelo(), Cor.AMARELO, externo);
@@ -155,6 +155,9 @@ public final class Rede implements AutoCloseable {
             System.out.printf("  visao      -> %s:%d  (a mesma coisa, por unicast)%n",
                     ip, config.portaVisao());
         }
+        if (config.broadcastLocal()) {
+            System.out.printf("  visao      -> broadcast das redes locais:%d%n", config.portaVisao());
+        }
         System.out.printf("  controle   <- porta %d  (SimulatorCommand)%n", config.portaControle());
         System.out.printf("  robos azul <- porta %d  (RobotControl)%n", config.portaAzul());
         System.out.printf("  robos amar <- porta %d  (RobotControl)%n", config.portaAmarelo());
@@ -173,6 +176,7 @@ public final class Rede implements AutoCloseable {
         for (String ip : config.destinos()) {
             extra.append("<br>+ unicast para ").append(ip);
         }
+        if (config.broadcastLocal()) extra.append("<br>+ broadcast na rede local");
 
         return String.format("<html>%s:%d%s<br>%,d pacotes enviados<br>"
                         + "%,d comandos - %,d de robo</html>",

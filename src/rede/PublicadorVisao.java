@@ -60,7 +60,12 @@ public final class PublicadorVisao implements AutoCloseable {
     private long pacotesEnviados;
 
     public PublicadorVisao(String grupo, int porta) throws IOException {
-        this(grupo, porta, "", List.of());
+        this(grupo, porta, "", List.of(), false);
+    }
+
+    public PublicadorVisao(String grupo, int porta, String interfaceDeSaida,
+                           List<String> destinos) throws IOException {
+        this(grupo, porta, interfaceDeSaida, destinos, false);
     }
 
     /**
@@ -72,7 +77,7 @@ public final class PublicadorVisao implements AutoCloseable {
      * @param destinos IPs que recebem a visao tambem por unicast
      */
     public PublicadorVisao(String grupo, int porta, String interfaceDeSaida,
-                           List<String> destinos) throws IOException {
+                           List<String> destinos, boolean broadcastLocal) throws IOException {
         this.socket = new MulticastSocket();
         this.socket.setTimeToLive(2);
         this.destino = new InetSocketAddress(InetAddress.getByName(grupo), porta);
@@ -94,8 +99,46 @@ public final class PublicadorVisao implements AutoCloseable {
             unicast.add(a);
         }
 
+        int digitados = unicast.size();
+        int redes = 0;
+        if (broadcastLocal) {
+            socket.setBroadcast(true);
+            for (InetAddress b : broadcastsLocais()) {
+                unicast.add(new InetSocketAddress(b, porta));
+                redes++;
+            }
+        }
+
         this.descricao = "multicast por " + saida
-                + (unicast.isEmpty() ? "" : " + " + unicast.size() + " unicast");
+                + (digitados == 0 ? "" : " + " + digitados + " unicast")
+                + (redes == 0 ? "" : " + broadcast em " + redes + " rede(s)");
+    }
+
+    /**
+     * O endereco de broadcast de cada rede IPv4 desta maquina.
+     *
+     * <p>Broadcast DIRIGIDO (192.168.15.255), e nao o limitado (255.255.255.255):
+     * o limitado costuma nao sair de interface nenhuma quando ha mais de uma, e e
+     * justamente a maquina com varias interfaces que precisa disto.
+     *
+     * <p>Nao chega a lugar nenhum fora da sub-rede -- roteador nao repassa
+     * broadcast, e isso e por design: se repassasse, um pacote de qualquer um
+     * chegaria a todo mundo. Para alem da sub-rede so o IP escrito a mao serve.
+     */
+    private static List<InetAddress> broadcastsLocais() {
+        List<InetAddress> saida = new ArrayList<>();
+        try {
+            for (NetworkInterface ni : java.util.Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!ni.isUp() || ni.isLoopback()) continue;
+                for (java.net.InterfaceAddress a : ni.getInterfaceAddresses()) {
+                    InetAddress b = a.getBroadcast();   // so IPv4 tem; IPv6 devolve null
+                    if (b != null) saida.add(b);
+                }
+            }
+        } catch (Exception ignorado) {
+            // Sem lista, sobra o multicast -- o comportamento de antes.
+        }
+        return saida;
     }
 
     /** Por onde a visao esta saindo, para a tela mostrar. */

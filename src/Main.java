@@ -177,6 +177,7 @@ public final class Main {
                     case "--porta-amarelo"  -> rede = rede.comPortaAmarelo(Integer.parseInt(args[++i]));
                     case "--interface"      -> rede = rede.comInterfaceDeSaida(args[++i]);
                     case "--enviar-para"    -> rede = rede.comDestinosUnicast(args[++i]);
+                    case "--broadcast"      -> rede = rede.comBroadcastLocal(true);
                     case "--ajuda", "-h"    -> { ajuda(); System.exit(0); }
                     default -> throw new IllegalArgumentException(
                             "argumento desconhecido: " + args[i] + " (use --ajuda)");
@@ -217,6 +218,10 @@ public final class Main {
                       --porta-amarelo <n>  RobotControl amarelo      (padrao 10302)
 
   --interface <nome>   por qual interface o multicast sai (padrao: o SO decide)
+  --broadcast          manda a visao TAMBEM para o broadcast das redes locais.
+                       E a opcao automatica: nao exige saber IP nenhum. So
+                       alcanca quem esta na MESMA sub-rede -- roteador nao
+                       repassa broadcast
   --enviar-para <ips>  manda a visao TAMBEM por unicast, ips separados por
                        virgula. Use quando o software de time esta em outra
                        maquina e o multicast nao atravessa a rede -- caso

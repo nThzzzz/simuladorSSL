@@ -263,8 +263,8 @@ public final class AutotesteRede {
         sim.inicializarPartida("A", 6, "B", 6);
         FonteDeVisao fonte = new VisaoLocal(sim);
 
-        ConfigRede antes = new ConfigRede(GRUPO, 11106, 11400, 11401, 11402, "", "");
-        ConfigRede depois = new ConfigRede(GRUPO, 11107, 11403, 11404, 11405, "", "");
+        ConfigRede antes = new ConfigRede(GRUPO, 11106, 11400, 11401, 11402, "", "", false);
+        ConfigRede depois = new ConfigRede(GRUPO, 11107, 11403, 11404, 11405, "", "", false);
 
         try (Rede rede = new Rede(sim, fonte, antes);
              MulticastSocket espiaAntes = espiar(11106);

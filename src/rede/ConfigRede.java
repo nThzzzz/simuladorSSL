@@ -14,13 +14,14 @@ import java.net.UnknownHostException;
  */
 public record ConfigRede(String grupoVisao, int portaVisao, int portaControle,
                          int portaAzul, int portaAmarelo,
-                         String interfaceDeSaida, String destinosUnicast) {
+                         String interfaceDeSaida, String destinosUnicast,
+                         boolean broadcastLocal) {
 
     public static ConfigRede padrao() {
         return new ConfigRede(Enderecos.VISAO_GRUPO, Enderecos.VISAO_PORTA,
                 Enderecos.CONTROLE_SIM_PORTA,
                 Enderecos.CONTROLE_AZUL_PORTA, Enderecos.CONTROLE_AMARELO_PORTA,
-                "", "");
+                "", "", false);
     }
 
     /** Normaliza nulo para vazio: "vazio" e "automatico" tem de ser a mesma coisa. */
@@ -29,11 +30,11 @@ public record ConfigRede(String grupoVisao, int portaVisao, int portaControle,
         destinosUnicast  = destinosUnicast  == null ? "" : destinosUnicast.trim();
     }
 
-    public ConfigRede comGrupo(String grupo)     { return new ConfigRede(grupo, portaVisao, portaControle, portaAzul, portaAmarelo, interfaceDeSaida, destinosUnicast); }
-    public ConfigRede comPortaVisao(int p)       { return new ConfigRede(grupoVisao, p, portaControle, portaAzul, portaAmarelo, interfaceDeSaida, destinosUnicast); }
-    public ConfigRede comPortaControle(int p)    { return new ConfigRede(grupoVisao, portaVisao, p, portaAzul, portaAmarelo, interfaceDeSaida, destinosUnicast); }
-    public ConfigRede comPortaAzul(int p)        { return new ConfigRede(grupoVisao, portaVisao, portaControle, p, portaAmarelo, interfaceDeSaida, destinosUnicast); }
-    public ConfigRede comPortaAmarelo(int p)     { return new ConfigRede(grupoVisao, portaVisao, portaControle, portaAzul, p, interfaceDeSaida, destinosUnicast); }
+    public ConfigRede comGrupo(String grupo)     { return new ConfigRede(grupo, portaVisao, portaControle, portaAzul, portaAmarelo, interfaceDeSaida, destinosUnicast, broadcastLocal); }
+    public ConfigRede comPortaVisao(int p)       { return new ConfigRede(grupoVisao, p, portaControle, portaAzul, portaAmarelo, interfaceDeSaida, destinosUnicast, broadcastLocal); }
+    public ConfigRede comPortaControle(int p)    { return new ConfigRede(grupoVisao, portaVisao, p, portaAzul, portaAmarelo, interfaceDeSaida, destinosUnicast, broadcastLocal); }
+    public ConfigRede comPortaAzul(int p)        { return new ConfigRede(grupoVisao, portaVisao, portaControle, p, portaAmarelo, interfaceDeSaida, destinosUnicast, broadcastLocal); }
+    public ConfigRede comPortaAmarelo(int p)     { return new ConfigRede(grupoVisao, portaVisao, portaControle, portaAzul, p, interfaceDeSaida, destinosUnicast, broadcastLocal); }
 
     /**
      * Por qual interface o multicast sai. Vazio deixa o SO escolher.
@@ -44,7 +45,7 @@ public record ConfigRede(String grupoVisao, int portaVisao, int portaControle,
      * RECEBE isto ja era tratado -- o cliente entra no grupo em todas as
      * interfaces -- e o lado que envia ficou para tras.
      */
-    public ConfigRede comInterfaceDeSaida(String nome) { return new ConfigRede(grupoVisao, portaVisao, portaControle, portaAzul, portaAmarelo, nome, destinosUnicast); }
+    public ConfigRede comInterfaceDeSaida(String nome) { return new ConfigRede(grupoVisao, portaVisao, portaControle, portaAzul, portaAmarelo, nome, destinosUnicast, broadcastLocal); }
 
     /**
      * IPs que recebem a visao TAMBEM por unicast, separados por virgula.
@@ -58,7 +59,23 @@ public record ConfigRede(String grupoVisao, int portaVisao, int portaControle,
      * <p>Nao exige nada do outro lado: um socket multicast preso a uma porta
      * recebe unicast naquela porta do mesmo jeito.
      */
-    public ConfigRede comDestinosUnicast(String ips) { return new ConfigRede(grupoVisao, portaVisao, portaControle, portaAzul, portaAmarelo, interfaceDeSaida, ips); }
+    public ConfigRede comDestinosUnicast(String ips) { return new ConfigRede(grupoVisao, portaVisao, portaControle, portaAzul, portaAmarelo, interfaceDeSaida, ips, broadcastLocal); }
+
+    /**
+     * Manda a visao para o BROADCAST de cada rede local, alem do multicast.
+     *
+     * <p>E a opcao "automatica": nao exige digitar IP nenhum, e resolve o caso
+     * que mais aparece -- duas maquinas na mesma casa, uma no cabo e outra no
+     * Wi-Fi, com o roteador nao repassando multicast entre os dois meios.
+     * Broadcast atravessa essa ponte com muito mais frequencia, porque e o que
+     * ARP e DHCP usam e o roteador PRECISA repassar para a rede funcionar.
+     *
+     * <p>Nao substitui o unicast, e nao chega ao mesmo lugar: broadcast NAO
+     * atravessa roteador, entao so alcanca quem esta na mesma sub-rede. Duas
+     * maquinas em faixas diferentes -- uma em 192.168.x e outra em 10.x, ou uma
+     * na rede de convidados -- continuam precisando do IP escrito a mao.
+     */
+    public ConfigRede comBroadcastLocal(boolean b) { return new ConfigRede(grupoVisao, portaVisao, portaControle, portaAzul, portaAmarelo, interfaceDeSaida, destinosUnicast, b); }
 
     /** Os destinos unicast como lista, ja sem vazios. */
     public java.util.List<String> destinos() {

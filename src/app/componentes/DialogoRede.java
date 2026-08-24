@@ -8,6 +8,7 @@ import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
@@ -69,6 +70,17 @@ public final class DialogoRede extends JDialog {
      */
     private final JTextField destinos = new JTextField(18);
 
+    /**
+     * Manda para o broadcast de cada rede local, sem exigir IP nenhum.
+     *
+     * <p>E a opcao para quem nao sabe -- nem quer saber -- o IP da outra
+     * maquina. Broadcast atravessa a ponte entre Wi-Fi e cabo com muito mais
+     * frequencia que multicast, porque e o que ARP e DHCP usam e o roteador
+     * precisa repassar para a rede funcionar.
+     */
+    private final JCheckBox broadcast =
+            new JCheckBox("Mandar para a rede local (broadcast, sem digitar IP)");
+
     private final JLabel mensagem = new JLabel(" ");
 
     private DialogoRede(Window dono, Rede rede) {
@@ -88,6 +100,8 @@ public final class DialogoRede extends JDialog {
         for (String nome : interfacesDisponiveis()) interfaceDeSaida.addItem(nome);
         linha(campos, "Interface de saida", interfaceDeSaida);
         linha(campos, "Tambem enviar para (IPs, virgula)", destinos);
+        campos.add(new JLabel());
+        campos.add(broadcast);
 
         mensagem.setForeground(TEXTO);
         mensagem.setBorder(BorderFactory.createEmptyBorder(0, 16, 8, 16));
@@ -142,7 +156,8 @@ public final class DialogoRede extends JDialog {
                     inteiro(portaAzul, "porta RobotControl azul"),
                     inteiro(portaAmarelo, "porta RobotControl amarelo"),
                     AUTOMATICA.equals(escolhida) ? "" : String.valueOf(escolhida),
-                    destinos.getText());
+                    destinos.getText(),
+                    broadcast.isSelected());
         } catch (IllegalArgumentException e) {
             dizer(e.getMessage(), ERRO);
             return;
@@ -180,6 +195,7 @@ public final class DialogoRede extends JDialog {
         interfaceDeSaida.setSelectedItem(
                 c.interfaceDeSaida().isBlank() ? AUTOMATICA : c.interfaceDeSaida());
         destinos.setText(c.destinosUnicast());
+        broadcast.setSelected(c.broadcastLocal());
     }
 
     /**

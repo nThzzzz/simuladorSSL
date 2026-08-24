@@ -13,19 +13,59 @@ import java.net.UnknownHostException;
  * @param portaAmarelo   porta de {@code RobotControl} da equipe amarela
  */
 public record ConfigRede(String grupoVisao, int portaVisao, int portaControle,
-                         int portaAzul, int portaAmarelo) {
+                         int portaAzul, int portaAmarelo,
+                         String interfaceDeSaida, String destinosUnicast) {
 
     public static ConfigRede padrao() {
         return new ConfigRede(Enderecos.VISAO_GRUPO, Enderecos.VISAO_PORTA,
                 Enderecos.CONTROLE_SIM_PORTA,
-                Enderecos.CONTROLE_AZUL_PORTA, Enderecos.CONTROLE_AMARELO_PORTA);
+                Enderecos.CONTROLE_AZUL_PORTA, Enderecos.CONTROLE_AMARELO_PORTA,
+                "", "");
     }
 
-    public ConfigRede comGrupo(String grupo)     { return new ConfigRede(grupo, portaVisao, portaControle, portaAzul, portaAmarelo); }
-    public ConfigRede comPortaVisao(int p)       { return new ConfigRede(grupoVisao, p, portaControle, portaAzul, portaAmarelo); }
-    public ConfigRede comPortaControle(int p)    { return new ConfigRede(grupoVisao, portaVisao, p, portaAzul, portaAmarelo); }
-    public ConfigRede comPortaAzul(int p)        { return new ConfigRede(grupoVisao, portaVisao, portaControle, p, portaAmarelo); }
-    public ConfigRede comPortaAmarelo(int p)     { return new ConfigRede(grupoVisao, portaVisao, portaControle, portaAzul, p); }
+    /** Normaliza nulo para vazio: "vazio" e "automatico" tem de ser a mesma coisa. */
+    public ConfigRede {
+        interfaceDeSaida = interfaceDeSaida == null ? "" : interfaceDeSaida.trim();
+        destinosUnicast  = destinosUnicast  == null ? "" : destinosUnicast.trim();
+    }
+
+    public ConfigRede comGrupo(String grupo)     { return new ConfigRede(grupo, portaVisao, portaControle, portaAzul, portaAmarelo, interfaceDeSaida, destinosUnicast); }
+    public ConfigRede comPortaVisao(int p)       { return new ConfigRede(grupoVisao, p, portaControle, portaAzul, portaAmarelo, interfaceDeSaida, destinosUnicast); }
+    public ConfigRede comPortaControle(int p)    { return new ConfigRede(grupoVisao, portaVisao, p, portaAzul, portaAmarelo, interfaceDeSaida, destinosUnicast); }
+    public ConfigRede comPortaAzul(int p)        { return new ConfigRede(grupoVisao, portaVisao, portaControle, p, portaAmarelo, interfaceDeSaida, destinosUnicast); }
+    public ConfigRede comPortaAmarelo(int p)     { return new ConfigRede(grupoVisao, portaVisao, portaControle, portaAzul, p, interfaceDeSaida, destinosUnicast); }
+
+    /**
+     * Por qual interface o multicast sai. Vazio deixa o SO escolher.
+     *
+     * <p>Existe porque deixar o SO escolher e justamente o que falha numa maquina
+     * com Wi-Fi, Ethernet e os adaptadores virtuais que Docker, VPN e VirtualBox
+     * criam: a rota padrao de multicast quase nunca e a da LAN. Do lado que
+     * RECEBE isto ja era tratado -- o cliente entra no grupo em todas as
+     * interfaces -- e o lado que envia ficou para tras.
+     */
+    public ConfigRede comInterfaceDeSaida(String nome) { return new ConfigRede(grupoVisao, portaVisao, portaControle, portaAzul, portaAmarelo, nome, destinosUnicast); }
+
+    /**
+     * IPs que recebem a visao TAMBEM por unicast, separados por virgula.
+     *
+     * <p>Multicast e o protocolo da liga e continua saindo. Mas entre duas
+     * maquinas -- uma no cabo e outra no Wi-Fi -- a ponte do roteador
+     * frequentemente nao repassa multicast, e em rede de faculdade ele costuma
+     * ser bloqueado por politica. Unicast nao depende de nada disso: sai como
+     * qualquer pacote UDP comum.
+     *
+     * <p>Nao exige nada do outro lado: um socket multicast preso a uma porta
+     * recebe unicast naquela porta do mesmo jeito.
+     */
+    public ConfigRede comDestinosUnicast(String ips) { return new ConfigRede(grupoVisao, portaVisao, portaControle, portaAzul, portaAmarelo, interfaceDeSaida, ips); }
+
+    /** Os destinos unicast como lista, ja sem vazios. */
+    public java.util.List<String> destinos() {
+        if (destinosUnicast.isBlank()) return java.util.List.of();
+        return java.util.Arrays.stream(destinosUnicast.split(","))
+                .map(String::trim).filter(x -> !x.isEmpty()).toList();
+    }
 
     /**
      * Explica por que a configuracao e invalida, ou {@code null} se estiver boa.

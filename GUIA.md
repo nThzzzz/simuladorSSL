@@ -114,6 +114,15 @@ porque o comprimento do vetor sozinho não diz nada depois que bate no teto.
 | scroll | zoom, ancorado no cursor |
 | arrastar | move o campo |
 
+O painel **Tela**, no fim da coluna, controla a taxa de redesenho. Em zero — o padrão — ele
+pergunta ao monitor e usa a taxa dele, então num monitor de 144 ou 165 Hz a janela deixa de
+ficar presa em 60.
+
+**Isso não afeta a física.** O relógio da tela só chama um acumulador de passo fixo: a simulação
+roda sempre em `dt`, e desenhar mais vezes só faz o acumulador devolver zero mais vezes. Existe
+como ajuste porque 165 Hz gasta CPU, e num notebook na bateria isso pesa mais do que a suavidade
+ganha.
+
 ---
 
 ## Ajustando a física
@@ -211,8 +220,20 @@ volume gravado em tempo real.
 **Firewall.** No macOS a primeira execução costuma pedir permissão de rede; se foi negada, o
 multicast não sai.
 
-**Máquinas diferentes?** Multicast precisa passar pelo roteador, e boa parte das redes de
-faculdade e de Wi-Fi público bloqueia. Na mesma máquina isso não aparece.
+**Em máquinas diferentes?** Tem receita, em **Rede → Configurar…**:
+
+1. No software de time, descubra o IP da máquina dele. No `estrategiaSSL` isso está em
+   *Configuracao avancada → Rede*, no bloco "Os IPs desta máquina".
+2. Ponha esse IP em **Tambem enviar para**. A visão passa a sair também por unicast, que não
+   depende do roteador repassar multicast — e a ponte entre Wi-Fi e cabo frequentemente não
+   repassa. O multicast continua saindo; o unicast é uma cópia a mais.
+3. Se ainda não chegar, escolha a **Interface de saída**. Vale quando a máquina tem VPN, Docker
+   ou VirtualBox: elas criam interfaces que aceitam multicast e não levam a lugar nenhum, e o
+   sistema às vezes escolhe justamente uma delas. Prefira a que mostra um IP ao lado do nome.
+
+> Do outro lado não é preciso mudar nada: um socket multicast preso a uma porta recebe unicast
+> nela do mesmo jeito. Isso é verificado no `teste.AutotesteRede`, com sockets de verdade e um
+> receptor que **não** entra no grupo — se o pacote chega, só pode ter vindo por unicast.
 
 ### Os robôs não se movem
 

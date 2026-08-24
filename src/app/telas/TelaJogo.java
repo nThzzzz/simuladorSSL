@@ -16,6 +16,7 @@ import model.RobotCommand;
 import sim.ConsoleLocal;
 import app.componentes.Campo;
 import view.Estilo;
+import view.TaxaDeTela;
 import visao.CanalDeControle;
 import visao.EstadoRobo;
 import visao.FonteDeVisao;
@@ -43,6 +44,7 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
+import java.awt.Window;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.event.MouseAdapter;
@@ -65,6 +67,19 @@ import java.time.format.DateTimeFormatter;
  * processo, e a rede e uma saida a mais, nao a fonte do que se ve.
  */
 public final class TelaJogo {
+
+    /**
+     * De quanto em quanto tempo se reconfere a taxa do monitor, em ms.
+     *
+     * <p>A janela pode mudar de monitor depois de aberta, e um valor lido so na
+     * abertura ficaria errado a partir dali.
+     */
+    private static final int MS_ENTRE_CONFERIDAS = 2000;
+
+    private Timer relogio;
+
+    /** Taxa pedida na tela; zero -- o padrao -- segue o monitor. */
+    private int hzPedido = 0;
 
     private static final Color FUNDO_PAINEL = Estilo.PAINEL;
     private static final Color TEXTO = Estilo.TEXTO;
@@ -132,15 +147,65 @@ public final class TelaJogo {
         lateral.getVerticalScrollBar().setUnitIncrement(16);
         frame.add(lateral, BorderLayout.EAST);
 
-        new Timer(16, e -> {
-            if (aCadaQuadro != null) aCadaQuadro.run();
-            campo.repaint();
-        }).start();
-
         frame.pack();
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
+
+        // Depois do setVisible, e nao antes: so com a janela na tela o sistema
+        // sabe dizer em QUAL monitor ela esta, e e dele que sai a taxa.
+        relogio = new Timer(TaxaDeTela.intervalo(TaxaDeTela.escolhida(hzPedido, frame)), e -> {
+            if (aCadaQuadro != null) aCadaQuadro.run();
+            campo.repaint();
+        });
+        relogio.start();
+
+        // A janela pode ser arrastada de um monitor de 165 Hz para um de 60, e a
+        // taxa lida na abertura ficaria errada a partir dali.
+        new Timer(MS_ENTRE_CONFERIDAS, e -> {
+            int ms = TaxaDeTela.intervalo(TaxaDeTela.escolhida(hzPedido, frame));
+            if (ms != relogio.getDelay()) relogio.setDelay(ms);
+        }).start();
+
         return frame;
+    }
+
+    /**
+     * Taxa de redesenho da janela.
+     *
+     * <p>Existe como ajuste, e nao so como deteccao, porque 165 Hz gasta CPU: num
+     * notebook na bateria isso pesa mais do que a suavidade ganha.
+     *
+     * <p>Nao mexe na fisica. O relogio da tela so chama {@code ticksPendentes},
+     * um acumulador de passo fixo -- a simulacao roda sempre em {@code dt}, e
+     * desenhar mais vezes so faz o acumulador devolver zero mais vezes.
+     */
+    private JComponent painelTela() {
+        JPanel painel = coluna();
+        painel.add(titulo("Tela"));
+
+        JLabel atual = rotulo(" ", APAGADO);
+        JSpinner hz = new JSpinner(new SpinnerNumberModel(0, 0, TaxaDeTela.MAX, 10));
+        hz.setMaximumSize(new Dimension(90, 24));
+        hz.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        Runnable dizer = () -> atual.setText("desenhando a "
+                + TaxaDeTela.escolhida(hzPedido, (Window) SwingUtilities.getWindowAncestor(painel))
+                + " Hz" + (hzPedido > 0 ? "" : " (do monitor)"));
+
+        hz.addChangeListener(e -> { hzPedido = (Integer) hz.getValue(); dizer.run(); });
+        new Timer(MS_ENTRE_CONFERIDAS, e -> dizer.run()).start();
+        dizer.run();
+
+        JPanel linha = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        linha.setBackground(FUNDO_PAINEL);
+        linha.setAlignmentX(Component.LEFT_ALIGNMENT);
+        linha.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+        linha.add(rotulo("Hz", APAGADO));
+        linha.add(hz);
+        painel.add(linha);
+        painel.add(rotulo("<html>0 segue o monitor</html>", APAGADO));
+        painel.add(atual);
+        return painel;
     }
 
     // ------------------------------------------------------------------- mouse
@@ -305,6 +370,9 @@ public final class TelaJogo {
         painel.add(painelFisica());
         painel.add(Box.createVerticalStrut(20));
         painel.add(painelRede());
+
+        painel.add(Box.createVerticalStrut(20));
+        painel.add(painelTela());
 
         painel.add(Box.createVerticalStrut(20));
         painel.add(rotulo("<html>arraste para mover o campo<br>scroll aplica zoom</html>", APAGADO));

@@ -17,6 +17,9 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.util.List;
+import java.util.ArrayList;
+import java.net.NetworkInterface;
 import java.net.MulticastSocket;
 
 /**
@@ -38,14 +41,65 @@ public final class PublicadorVisao implements AutoCloseable {
     private final MulticastSocket socket;
     private final InetSocketAddress destino;
 
+    /**
+     * Copias unicast do mesmo pacote.
+     *
+     * <p>Multicast e o protocolo da liga e continua saindo -- estes destinos sao
+     * ADICIONAIS. Entre duas maquinas, uma no cabo e outra no Wi-Fi, a ponte do
+     * roteador frequentemente nao repassa multicast, e em rede de faculdade ele
+     * costuma ser bloqueado por politica. Unicast sai como qualquer UDP comum, e
+     * nao exige nada do outro lado: um socket multicast preso a uma porta recebe
+     * unicast nela do mesmo jeito.
+     */
+    private final List<InetSocketAddress> unicast = new ArrayList<>();
+
+    /** O que dizer na tela sobre por onde a visao esta saindo. */
+    private final String descricao;
+
     private long ultimaGeometria = -1;
     private long pacotesEnviados;
 
     public PublicadorVisao(String grupo, int porta) throws IOException {
+        this(grupo, porta, "", List.of());
+    }
+
+    /**
+     * @param interfaceDeSaida nome da interface por onde o multicast sai; vazio
+     *        deixa o SO escolher -- que e o que falha numa maquina com Docker,
+     *        VPN ou VirtualBox, onde a rota padrao de multicast quase nunca e a
+     *        da LAN. Do lado que RECEBE isto ja era tratado: o cliente entra no
+     *        grupo em TODAS as interfaces, e so o lado que envia ficou para tras.
+     * @param destinos IPs que recebem a visao tambem por unicast
+     */
+    public PublicadorVisao(String grupo, int porta, String interfaceDeSaida,
+                           List<String> destinos) throws IOException {
         this.socket = new MulticastSocket();
         this.socket.setTimeToLive(2);
         this.destino = new InetSocketAddress(InetAddress.getByName(grupo), porta);
+
+        String saida = "automatica";
+        if (interfaceDeSaida != null && !interfaceDeSaida.isBlank()) {
+            // O combo mostra "en0 (192.168.0.14)"; o nome e o que vem antes.
+            String nome = interfaceDeSaida.split(" ")[0];
+            NetworkInterface ni = NetworkInterface.getByName(nome);
+            if (ni == null) throw new IOException("interface \"" + nome + "\" nao existe");
+            if (!ni.isUp()) throw new IOException("interface \"" + nome + "\" esta fora do ar");
+            socket.setNetworkInterface(ni);
+            saida = nome;
+        }
+
+        for (String ip : destinos) {
+            InetSocketAddress a = new InetSocketAddress(InetAddress.getByName(ip), porta);
+            if (a.isUnresolved()) throw new IOException("nao consegui resolver \"" + ip + "\"");
+            unicast.add(a);
+        }
+
+        this.descricao = "multicast por " + saida
+                + (unicast.isEmpty() ? "" : " + " + unicast.size() + " unicast");
     }
+
+    /** Por onde a visao esta saindo, para a tela mostrar. */
+    public String descricao() { return descricao; }
 
     public long getPacotesEnviados() { return pacotesEnviados; }
 
@@ -63,6 +117,9 @@ public final class PublicadorVisao implements AutoCloseable {
     private void enviar(SSL_WrapperPacket pacote) throws IOException {
         byte[] dados = pacote.toByteArray();
         socket.send(new DatagramPacket(dados, dados.length, destino));
+        for (InetSocketAddress a : unicast) {
+            socket.send(new DatagramPacket(dados, dados.length, a));
+        }
         pacotesEnviados++;
     }
 

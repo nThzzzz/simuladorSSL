@@ -173,6 +173,9 @@ public final class AutotesteRede {
         chipPelaRede();
         reconfiguracao();
 
+        unicastEntregaSemMulticast();
+        interfaceInexistenteFalhaCedo();
+
         System.out.printf("%n%d/%d verificacoes passaram%n", total - falhas, total);
         if (falhas > 0) System.exit(1);
     }
@@ -260,8 +263,8 @@ public final class AutotesteRede {
         sim.inicializarPartida("A", 6, "B", 6);
         FonteDeVisao fonte = new VisaoLocal(sim);
 
-        ConfigRede antes = new ConfigRede(GRUPO, 11106, 11400, 11401, 11402);
-        ConfigRede depois = new ConfigRede(GRUPO, 11107, 11403, 11404, 11405);
+        ConfigRede antes = new ConfigRede(GRUPO, 11106, 11400, 11401, 11402, "", "");
+        ConfigRede depois = new ConfigRede(GRUPO, 11107, 11403, 11404, 11405, "", "");
 
         try (Rede rede = new Rede(sim, fonte, antes);
              MulticastSocket espiaAntes = espiar(11106);
@@ -320,6 +323,61 @@ public final class AutotesteRede {
      * quase nenhuma heuristica escolhe. Entrar em todas evita o sintoma pior --
      * nao chegar nada e nao haver erro.
      */
+    /**
+     * O envio unicast entrega sem multicast nenhum no caminho.
+     *
+     * <p>E o conserto do caso "um no cabo, outro no Wi-Fi": a ponte do roteador
+     * frequentemente nao repassa multicast entre os dois meios, e em rede de
+     * faculdade ele costuma ser bloqueado por politica. O receptor aqui NAO entra
+     * no grupo de proposito -- se o pacote chegar, so pode ter vindo por unicast.
+     *
+     * <p>Confirma tambem que o outro lado nao precisa de mudanca nenhuma: o
+     * socket e um {@link MulticastSocket} preso a porta, exatamente como o
+     * {@code ReceptorDeVisao}, e ele recebe unicast do mesmo jeito.
+     */
+    private static void unicastEntregaSemMulticast() throws Exception {
+        final int porta = 11506;
+        Simulacao sim = new Simulacao(Geometria.divisaoB(), ParametrosFisica.padrao(), 1.0 / 60.0);
+        sim.inicializarPartida("Azuis", 6, "Amarelos", 6);
+        FonteDeVisao fonte = new VisaoLocal(sim);
+
+        // Grupo que ninguem escuta: se chegar algo, veio pelo unicast.
+        try (PublicadorVisao pub = new PublicadorVisao("224.5.23.77", porta,
+                     "", List.of("127.0.0.1"));
+             MulticastSocket rx = new MulticastSocket(porta)) {
+
+            rx.setSoTimeout(1500);
+            for (int i = 0; i < 5; i++) { sim.tick(); pub.publicar(fonte.ultimoQuadro()); }
+
+            SSL_WrapperPacket recebido = null;
+            try {
+                DatagramPacket p = new DatagramPacket(new byte[65535], 65535);
+                rx.receive(p);
+                recebido = SSL_WrapperPacket.parseFrom(
+                        java.util.Arrays.copyOf(p.getData(), p.getLength()));
+            } catch (java.net.SocketTimeoutException ignorado) {
+                // fica nulo, e a verificacao abaixo falha com a mensagem certa
+            }
+
+            verdadeiro("unicast: a visao chega sem o receptor entrar no grupo",
+                    recebido != null && recebido.hasDetection());
+            verdadeiro("unicast: e o quadro vem completo",
+                    recebido != null && recebido.getDetection().getRobotsBlueCount() == 6);
+        }
+    }
+
+    /** Interface que nao existe tem de falhar na hora, e nao publicar no vazio. */
+    private static void interfaceInexistenteFalhaCedo() {
+        boolean reclamou = false;
+        try (PublicadorVisao ignorado = new PublicadorVisao(GRUPO, 11507,
+                "nao-existe-mesmo", List.of())) {
+            // nao deveria chegar aqui
+        } catch (Exception e) {
+            reclamou = e.getMessage() != null && e.getMessage().contains("nao existe");
+        }
+        verdadeiro("rede: interface inexistente falha na hora, com nome no erro", reclamou);
+    }
+
     private static MulticastSocket abrirEspia() throws IOException {
         return espiar(PORTA_VISAO);
     }

@@ -177,6 +177,25 @@ escolhido o referencial local do robô desde o começo deixou essa parte como co
 unidade e mais nada. Dos três modos de movimento do `RobotControl`, só esse é tratado;
 velocidade global e velocidade de roda ainda não.
 
+### Quando o software de time está em outra máquina
+
+O `MulticastSocket` publicava pela interface que o **sistema** escolhesse, e é justamente aí que
+falha: numa máquina com VPN, Docker ou VirtualBox há uma dúzia de interfaces que aceitam
+multicast e não levam a lugar nenhum. O lado que **recebe** já tratava isso — o cliente entra no
+grupo em todas as interfaces — e o lado que envia tinha ficado para trás. `Interface de saída`,
+em *Rede → Configurar…*, resolve; a lista mostra o IP ao lado do nome, e as com IPv4 vêm
+primeiro, porque `utun3` e `awdl0` nunca são a resposta.
+
+Mas escolher a interface não salva quando o problema é a **rede**, e frequentemente é: a ponte
+do roteador entre Wi-Fi e cabo muitas vezes não repassa multicast, e rede de faculdade costuma
+bloquear por política. Para isso existe `Tambem enviar para`: uma cópia de cada pacote vai por
+**unicast** para os IPs listados, e unicast sai como qualquer UDP comum. O multicast continua
+saindo — os destinos são adicionais, não substitutos, e o protocolo da liga segue intacto.
+
+Do outro lado não é preciso mudar nada, e isso não é suposição: um socket multicast preso a uma
+porta recebe unicast nela do mesmo jeito. O `teste.AutotesteRede` publica num grupo que ninguém
+escuta e confere que o quadro chega assim mesmo.
+
 ## Motor de física
 
 * **Passo fixo** (`SimClock`, 60 Hz por padrão). É o que torna o log reproduzível: o mesmo

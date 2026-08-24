@@ -100,7 +100,8 @@ public final class Rede implements AutoCloseable {
         ReceptorDeComandosRobo az = null;
         ReceptorDeComandosRobo am = null;
         try {
-            v = new PublicadorVisao(c.grupoVisao(), c.portaVisao());
+            v = new PublicadorVisao(c.grupoVisao(), c.portaVisao(),
+                    c.interfaceDeSaida(), c.destinos());
             ct = new ReceptorDeControle(c.portaControle(), destinoDeControle);
             az = new ReceptorDeComandosRobo(c.portaAzul(), Cor.AZUL, externo);
             am = new ReceptorDeComandosRobo(c.portaAmarelo(), Cor.AMARELO, externo);

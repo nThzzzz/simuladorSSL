@@ -77,8 +77,9 @@ que não devia.
 | **TRABALHO** | `app` `app.telas` `app.componentes` `app.fisica` | a janela |
 | **EXTENSAO** | `demo` | onde se escreve roteiro de teste novo |
 
-**ESTAVEL não pode depender de TRABALHO nem de EXTENSAO** — é o que garante que a física e a
-rede não saibam que existe janela, e é por isso que o modo `--headless` roda sem abrir nenhuma.
+**ESTAVEL não pode depender de TRABALHO nem de EXTENSAO**, e é essa regra que garante que a
+física e a rede não saibam que existe janela, e é por isso que o modo `--headless` roda sem
+abrir nenhuma.
 
 ### O grafo
 
@@ -106,7 +107,7 @@ app      →  model, rede,            Rede                       <- orquestrador
 
 `telas/` são janelas inteiras que montam um layout; `componentes/` são os pedaços que elas
 montam, e a dependência é numa direção só. `app/fisica/` fica de fora dos dois de propósito: são
-os ensaios que o diálogo plota, e isso é **conta, não desenho** — quem desenha é o
+os ensaios que o diálogo plota, e isso é **conta, não desenho**. Quem desenha é o
 `PainelEnsaio`, que mora em `componentes/`.
 
 Os nomes levam o tipo, como as implementações de estratégia do outro repositório:
@@ -181,8 +182,8 @@ velocidade global e velocidade de roda ainda não.
 
 O `MulticastSocket` publicava pela interface que o **sistema** escolhesse, e é justamente aí que
 falha: numa máquina com VPN, Docker ou VirtualBox há uma dúzia de interfaces que aceitam
-multicast e não levam a lugar nenhum. O lado que **recebe** já tratava isso — o cliente entra no
-grupo em todas as interfaces — e o lado que envia tinha ficado para trás. `Interface de saída`,
+multicast e não levam a lugar nenhum. O lado que **recebe** já tratava isso, porque o cliente
+entra no grupo em todas as interfaces, e o lado que envia tinha ficado para trás. `Interface de saída`,
 em *Rede → Configurar…*, resolve; a lista mostra o IP ao lado do nome, e as com IPv4 vêm
 primeiro, porque `utun3` e `awdl0` nunca são a resposta.
 
@@ -190,7 +191,8 @@ Mas escolher a interface não salva quando o problema é a **rede**, e frequente
 do roteador entre Wi-Fi e cabo muitas vezes não repassa multicast, e rede de faculdade costuma
 bloquear por política. Para isso existe `Tambem enviar para`: uma cópia de cada pacote vai por
 **unicast** para os IPs listados, e unicast sai como qualquer UDP comum. O multicast continua
-saindo — os destinos são adicionais, não substitutos, e o protocolo da liga segue intacto.
+saindo, já que os destinos são adicionais e não substitutos, e o protocolo da liga segue
+intacto.
 
 Do outro lado não é preciso mudar nada, e isso não é suposição: um socket multicast preso a uma
 porta recebe unicast nela do mesmo jeito. O `teste.AutotesteRede` publica num grupo que ninguém
@@ -256,26 +258,27 @@ os dois **freavam antes de encostar**.
 ### O gol tem paredes
 
 O gol era enfeite: `Geometria` guardava largura e profundidade, o desenho pintava um retângulo
-atrás da linha de fundo e a física não sabia que ele existia — a bola atravessava o gol inteiro
-e ia quicar na parede da faixa externa, 300 mm atrás. Agora são **três paredes por gol**, dois
-postes e o fundo, com os 20 mm de espessura e os 155 mm de altura do regulamento. A bola que
-entra pela boca fica lá dentro, chacoalhando; o robô entra atrás dela e para na face interna do
-fundo.
+atrás da linha de fundo e a física não sabia que ele existia, então a bola atravessava o gol
+inteiro e ia quicar na parede da faixa externa, 300 mm atrás. Agora são **três paredes por
+gol**, dois postes e o fundo, com os 20 mm de espessura e os 155 mm de altura do regulamento. A
+bola que entra pela boca fica lá dentro, chacoalhando; o robô entra atrás dela e para na face
+interna do fundo.
 
 `golProfundidade` é a profundidade **interna**, como no regulamento, então a pegada total do gol
-é 180 + 20 = 200 mm — cabe nos 300 da faixa externa, com 100 mm de folga até a parede física.
+é 180 + 20 = 200 mm, que cabe nos 300 da faixa externa, com 100 mm de folga até a parede
+física.
 
 O gol é o único obstáculo do campo fino o bastante para a bola **pular por cima dele em um
 passo**: a parede tem 20 mm, a bola tem 43 de diâmetro e a 60 Hz ela percorre até 108 mm por
 quadro. Resolver o contato pela posição de chegada, como se faz com o robô e com a parede
-externa, deixaria um chute forte sair pelo fundo — num quadro a bola estaria dentro, no seguinte
-já atrás da estrutura, sem nunca ter tocado nela. Por isso o contato com o gol é **varrido**: o
+externa, deixaria um chute forte sair pelo fundo, porque num quadro a bola estaria dentro e no
+seguinte já atrás da estrutura, sem nunca ter tocado nela. Por isso o contato com o gol é **varrido**: o
 que se confronta com a parede é o segmento que a bola percorreu no passo, não o ponto onde ela
 parou.
 
 Pelo mesmo motivo a velocidade do quique é a do **instante do toque**, e não a do fim do passo.
-O integrador cobra atrito do passo inteiro, inclusive do trecho depois do contato — trecho que a
-bola nunca percorreu. Devolver esse pedaço custa uma linha e vale isto:
+O integrador cobra atrito do passo inteiro, inclusive do trecho depois do contato, que a bola
+nunca percorreu. Devolver esse pedaço custa uma linha e vale isto:
 
 | | 60 Hz | 240 Hz | 2000 Hz |
 |---|---:|---:|---:|
@@ -289,10 +292,10 @@ mudaria a física já gravada nos logs antigos.
 A altura vai na visão, em `SSL_GeometryFieldSize.goal_height`, que o protocolo tem e antes saía
 zerado. A **espessura da parede** não vai: não existe campo para ela, então quem consome a visão
 sabe onde é a boca do gol e não sabe de que grossura é o poste. É mais um caso da assimetria de
-sempre — o simulador sabe mais do que consegue contar.
+sempre, em que o simulador sabe mais do que consegue contar.
 
-Os 155 mm de altura são de verdade — acima deles não há gol nenhum, e é isso que faz um chip por
-cima da trave continuar valendo. A parede externa é que segue infinitamente alta, então a bola
+Os 155 mm de altura são de verdade, porque acima deles não há gol nenhum, e é isso que faz um
+chip por cima da trave continuar valendo. A parede externa é que segue infinitamente alta, então a bola
 nunca se perde. Duas aproximações conhecidas: os cantos dos postes são quina viva, sem o
 arredondamento da soma de Minkowski (a mesma simplificação já assumida na boca do dribbler), e
 só o primeiro contato de cada passo é resolvido.
@@ -460,8 +463,8 @@ streams e mostra o volume gravado em tempo real. O painel de física abre a jane
 configuração de portas.
 
 Arrastar com o **botão esquerdo** move o campo. Antes só o direito deslocava, e num trackpad de
-MacBook não há botão direito para segurar — clique de dois dedos não se sustenta enquanto um
-terceiro arrasta —, então o campo era, na prática, fixo para quem não usa mouse. O direito
+MacBook não há botão direito para segurar, já que clique de dois dedos não se sustenta enquanto
+um terceiro arrasta, então o campo era, na prática, fixo para quem não usa mouse. O direito
 continua funcionando.
 Não há conflito com o chute porque a mira só começa quando o clique cai a menos de 250 mm da
 bola; fora desse raio o arrasto não tinha uso nenhum.
@@ -471,12 +474,12 @@ Antes ancorava no centro do painel, e quem olhava um canto via o canto fugir da 
 passo, tendo de arrastar de volta toda vez.
 
 Cada evento de scroll vale no máximo **um entalhe de roda**. O trackpad do mac não manda um
-evento por gesto como uma roda com entalhe: manda uma rajada — medidos 327 eventos em 4 s — em
-que o peso varia de 0,006 a 4,7. Sem teto, aquele 4,7 sozinho mudava a escala em 58% num quadro,
+evento por gesto como uma roda com entalhe: manda uma rajada, com 327 eventos medidos em 4 s,
+em que o peso varia de 0,006 a 4,7. Sem teto, aquele 4,7 sozinho mudava a escala em 58% num quadro,
 no meio de centenas de eventos que não faziam nada visível. Era esse contraste, e não a
 sensibilidade média, que fazia o zoom parecer instável: quase parado e de repente um pulo.
 Cortar em um entalhe limita pela coisa certa e por isso não estraga a roda de mouse, onde o
-valor já é 1 e o corte nunca age. O `teste.Autoteste` prende as três coisas — âncora, batente e
+valor já é 1 e o corte nunca age. O `teste.Autoteste` prende as três coisas: âncora, batente e
 teto do pico.
 
 Ao mirar um chute, o vetor mostra a velocidade resultante em m/s e fica vermelho ao saturar

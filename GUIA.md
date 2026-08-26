@@ -2,9 +2,9 @@
 
 Este é o guia de **uso**: como rodar, como mexer e o que fazer quando algo não funciona.
 
-Para saber **por que** cada decisão de projeto é o que é — por que o atrito tem duas fases, por
-que a colisão usa velocidade relativa, por que a física precisa ser independente de `dt` — o
-lugar é o [README](README.md). Os dois textos têm leitores diferentes de propósito.
+Para saber **por que** cada decisão de projeto é o que é, ou seja, por que o atrito tem duas
+fases, por que a colisão usa velocidade relativa e por que a física precisa ser independente de
+`dt`, o lugar é o [README](README.md). Os dois textos têm leitores diferentes de propósito.
 
 **Entre por onde faz sentido para você:**
 
@@ -26,7 +26,7 @@ protocolo oficial da liga.
 ![A janela do simulador](docs/janela.png)
 
 Ele **não tem lógica de jogo nenhuma**. Sem um software de time conectado, os robôs ficam
-parados — e isso está certo, é como o grSim se comporta. Quem decide o que os robôs fazem é o
+parados, e isso está certo, porque é como o grSim se comporta. Quem decide o que os robôs fazem é o
 repositório irmão, [estrategiaSSL](https://github.com/nThzzzz/estrategiaSSL).
 
 ```mermaid
@@ -39,7 +39,7 @@ flowchart LR
 ```
 
 Como a conversa é o **protocolo oficial**, e não uma chamada de função, qualquer software de
-time da liga funciona no lugar do nosso — e o nosso funciona contra o grSim sem trocar uma
+time da liga funciona no lugar do nosso, e o nosso funciona contra o grSim sem trocar uma
 linha.
 
 ### O que ele sabe e não conta
@@ -61,8 +61,8 @@ no teto. O que o simulador sabe a mais vai para o **log**, que é onde serve par
 - **Java 22 ou mais novo** (`java -version` para conferir). Sem Gradle, sem Maven.
 - **Git**.
 
-Os `.jar` estão versionados em `lib/` e o Java gerado dos `.proto` em `src/proto/` — um clone
-limpo compila **offline**.
+Os `.jar` estão versionados em `lib/` e o Java gerado dos `.proto` em `src/proto/`, então um
+clone limpo compila **offline**.
 
 ### Rodando
 
@@ -104,7 +104,7 @@ faz o papel de um software de time conectado:
 | **Posicionar bola** | clique para teleportar a bola |
 | **Inspecionar robo** | clique num robô para ver seu estado |
 
-Ao mirar, o vetor fica **vermelho ao saturar** nos 6,5 m/s — sem isso não dá para dosar a força,
+Ao mirar, o vetor fica **vermelho ao saturar** nos 6,5 m/s. Sem isso não dá para dosar a força,
 porque o comprimento do vetor sozinho não diz nada depois que bate no teto.
 
 ### Na tela
@@ -114,7 +114,7 @@ porque o comprimento do vetor sozinho não diz nada depois que bate no teto.
 | scroll | zoom, ancorado no cursor |
 | arrastar | move o campo |
 
-O painel **Tela**, no fim da coluna, controla a taxa de redesenho. Em zero — o padrão — ele
+O painel **Tela**, no fim da coluna, controla a taxa de redesenho. Em zero, que é o padrão, ele
 pergunta ao monitor e usa a taxa dele, então num monitor de 144 ou 165 Hz a janela deixa de
 ficar presa em 60.
 
@@ -155,8 +155,8 @@ Roda centenas de vezes mais rápido que o tempo real. Ele **não publica** de pr
 velocidade inundaria o multicast.
 
 A saída é um diretório com o tracking (`ball.csv`, `robots.csv`) e os eventos
-(`events.jsonl`). O log carrega o que o protocolo da visão não tem campo para mandar —
-velocidade, comando aplicado, posse de bola — que é justamente o que torna o dataset útil para
+(`events.jsonl`). O log carrega o que o protocolo da visão não tem campo para mandar, que são
+velocidade, comando aplicado e posse de bola, e é justamente isso que torna o dataset útil para
 conferir uma inferência contra a verdade.
 
 | flag | efeito |
@@ -225,7 +225,7 @@ multicast não sai.
 1. No software de time, descubra o IP da máquina dele. No `estrategiaSSL` isso está em
    *Configuracao avancada → Rede*, no bloco "Os IPs desta máquina".
 2. Ponha esse IP em **Tambem enviar para**. A visão passa a sair também por unicast, que não
-   depende do roteador repassar multicast — e a ponte entre Wi-Fi e cabo frequentemente não
+   depende do roteador repassar multicast, e a ponte entre Wi-Fi e cabo frequentemente não
    repassa. O multicast continua saindo; o unicast é uma cópia a mais.
 3. Se ainda não chegar, escolha a **Interface de saída**. Vale quando a máquina tem VPN, Docker
    ou VirtualBox: elas criam interfaces que aceitam multicast e não levam a lugar nenhum, e o
@@ -233,16 +233,16 @@ multicast não sai.
 
 > Do outro lado não é preciso mudar nada: um socket multicast preso a uma porta recebe unicast
 > nela do mesmo jeito. Isso é verificado no `teste.AutotesteRede`, com sockets de verdade e um
-> receptor que **não** entra no grupo — se o pacote chega, só pode ter vindo por unicast.
+> receptor que **não** entra no grupo: se o pacote chega, só pode ter vindo por unicast.
 
 ### Os robôs não se movem
 
-É o comportamento **correto** quando ninguém está conectado — igual ao grSim. Para ver
+É o comportamento **correto** quando ninguém está conectado, igual ao grSim. Para ver
 movimento, escolha um cenário de teste no painel da direita, ou conecte um software de time.
 
 Se a estratégia está conectada e mesmo assim nada anda, confira a **porta pela cor**: comando de
 azul vai para `10301`, de amarelo para `10302`. Jogando de amarelo e mandando na porta do azul,
-o simulador ignora — e ignora em silêncio, porque do ponto de vista dele não chegou nada.
+o simulador ignora, e ignora em silêncio, porque do ponto de vista dele não chegou nada.
 
 ### Mexi na física e um teste quebrou
 
@@ -250,5 +250,5 @@ Provavelmente o de **independência de `dt`**. Ele existe porque a física antig
 atrito era aplicado por quadro, então mudar o FPS mudava a trajetória. Um log gerado assim não
 vale nada, porque não descreve nenhum mundo consistente.
 
-Se a sua mudança precisa mesmo quebrar essa invariante, o README explica o raciocínio original —
+Se a sua mudança precisa mesmo quebrar essa invariante, o README explica o raciocínio original;
 mude a justificativa junto, senão a regressão volta em seis meses sem ninguém entender por quê.
